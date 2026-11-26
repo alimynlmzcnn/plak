@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plak</title>
+<style>
+  :root { color-scheme: dark; --glow: 200, 200, 210; --b: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; color: #fff; overflow: hidden;
+    font-family: system-ui, "Segoe UI", sans-serif; }
+
+  /* ---------- fotoğraf arka plan ---------- */
+  .photo { position: fixed; inset: 0; background-size: cover; background-position: center; opacity: 0;
+    transition: opacity 1.6s ease; z-index: 0; animation: drift 50s ease-in-out infinite alternate; }
+  .photo.on { opacity: 1; }
+  @keyframes drift { from { transform: scale(1.04) translate(0, 0); } to { transform: scale(1.14) translate(-1.5%, -1%); } }
+  #shade { position: fixed; inset: 0; background: #000; opacity: .42; z-index: 0; pointer-events: none; }
+  #vig { position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 45%, transparent 35%, rgba(0,0,0,.8) 100%); }
+  #credit { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); max-width: 36vw; z-index: 1; font-size: 11px;
+    color: rgba(255,255,255,.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+
+  #stage { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+  #status { position: fixed; left: 0; right: 0; top: 50%; text-align: center; z-index: 1; font: italic clamp(16px, 2vw, 22px) Georgia, serif;
+    color: rgba(255,255,255,.45); transition: opacity .5s; pointer-events: none; padding: 0 8vw; }
+  #now { position: fixed; top: 22px; left: 0; right: 0; text-align: center; font-size: 13px; z-index: 1;
+    color: rgba(255,255,255,.4); letter-spacing: .03em; pointer-events: none; }
+
+  /* ---------- kelime ---------- */
+  .word { position: absolute; left: 0; top: 0; width: max-content; will-change: transform;
+    transition: opacity 1.25s ease-out, filter 1.25s ease-out; }
+  .word.out { opacity: 0; filter: blur(3px); }
+  .fx { display: block; white-space: nowrap; color: #fff; line-height: 1;
+    text-shadow: 0 2px 26px rgba(0,0,0,.5), 0 0 calc(14px + var(--b) * 26px) rgba(var(--glow), .6), 0 0 calc(46px + var(--b) * 54px) rgba(var(--glow), .32); }
+  .fx.big { font-family: Impact, Haettenschweiler, "Franklin Gothic Heavy", "Arial Black", sans-serif; font-weight: 400;
+    text-transform: uppercase; letter-spacing: .01em; }
+  .fx.small { font-family: "Iowan Old Style", Palatino, Georgia, serif; font-style: italic; font-weight: 400; }
+  .ch { display: inline-block; }
+
+  .fx-slam    { animation: slam .28s cubic-bezier(.2,.9,.2,1) both; }
+  .fx-drop .ch   { animation: drop .32s cubic-bezier(.2,.9,.3,1.2) both; animation-delay: calc(var(--i) * 28ms); }
+  .fx-stretch { animation: stretch .45s cubic-bezier(.15,.8,.2,1) both; }
+  .fx-rise    { animation: rise .35s cubic-bezier(.2,.8,.2,1) both; }
+  .fx-flip    { animation: flip .36s cubic-bezier(.2,.8,.2,1) both; transform-origin: 50% 100%; }
+  .fx-scatter .ch { animation: scatter .45s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i) * 14ms); }
+  .fx-type .ch   { opacity: 0; animation: show 0s forwards; animation-delay: calc(var(--i) * 32ms); }
+  .fx-shake   { animation: shakeIn .4s linear both; }
+
+  @keyframes slam { from { transform: scale(1.5); opacity: 0; filter: blur(6px); } to { transform: none; opacity: 1; filter: blur(0); } }
+  @keyframes drop { from { opacity: 0; transform: translateY(-.6em); filter: blur(4px); } to { opacity: 1; transform: none; filter: blur(0); } }
+  @keyframes stretch { from { letter-spacing: .5em; opacity: 0; } to { letter-spacing: .02em; opacity: 1; } }
+  @keyframes rise { from { transform: translateY(28px); opacity: 0; filter: blur(6px); } to { transform: none; opacity: 1; filter: blur(0); } }
+  @keyframes flip { from { transform: perspective(600px) rotateX(-80deg); opacity: 0; } to { transform: perspective(600px) rotateX(0); opacity: 1; } }
+  @keyframes scatter { from { transform: translate(var(--dx), var(--dy)) rotate(var(--r)) scale(.4); opacity: 0; filter: blur(5px); } to { transform: none; opacity: 1; filter: blur(0); } }
+  @keyframes show { to { opacity: 1; } }
+  @keyframes shakeIn { 0% { opacity: 0; transform: scale(1.35); } 20% { opacity: 1; transform: translate(-6px, 3px) scale(1.12); } 40% { transform: translate(5px, -4px) scale(1.06); }
+    65% { transform: translate(-3px, 2px); } 100% { transform: none; } }
+
+  /* ---------- plak ---------- */
+  #rec { position: fixed; left: -120px; bottom: -120px; width: 440px; height: 440px; border-radius: 50%; z-index: 3;
+    touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  #rec.drag { cursor: grabbing; }
+  #wheel { position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(circle, #000 0 15%, transparent 15.4%),
+      conic-gradient(from 20deg, transparent 0 7%, rgba(255,255,255,.05) 11%, transparent 15%, transparent 57%, rgba(255,255,255,.05) 61%, transparent 65%),
+      repeating-radial-gradient(circle, #050505 0 2px, #151515 3px 4px), #070707;
+    box-shadow: 0 0 0 1px #262626, 0 10px 60px rgba(0,0,0,.8); }
+  #rec.playing #wheel { box-shadow: 0 0 0 1px #2e2e2e, 0 10px 60px rgba(0,0,0,.8); }
+  #wheel::after { content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+    background: repeating-conic-gradient(from -.4deg, rgba(255,255,255,.3) 0 .8deg, transparent .8deg 15deg);
+    -webkit-mask: radial-gradient(circle closest-side, transparent 0 88%, #000 89% 95%, transparent 96%);
+    mask: radial-gradient(circle closest-side, transparent 0 88%, #000 89% 95%, transparent 96%); }
+  #sheen { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; animation: spin 3.2s linear infinite; animation-play-state: paused;
+    background: conic-gradient(from 0deg, transparent 0 18%, rgba(255,255,255,.07) 25%, transparent 32%, transparent 68%, rgba(255,255,255,.07) 75%, transparent 82%); }
+  #rec.playing #sheen { animation-play-state: running; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #hub { position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
+    background: #000; border: 1px solid rgba(255,255,255,.22); display: grid; place-items: center; pointer-events: none; }
+  #hub i { width: 10px; height: 10px; border-radius: 50%; background: #fff; opacity: .85; }
+  #rec:not(.playing):not(.scrub) #hub i { width: 0; height: 0; background: none; border-radius: 0; opacity: 1;
+    border-style: solid; border-width: 8px 0 8px 13px; border-color: transparent transparent transparent rgba(255,255,255,.8); margin-left: 4px; }
+  #needle { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: rotate(45deg); pointer-events: none; }
+  #needle b { position: absolute; left: -1px; top: -246px; width: 2px; height: 30px; background: #fff; border-radius: 2px;
+    box-shadow: 0 0 10px rgba(255,255,255,.8); }
+
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; height: 14px; cursor: pointer; z-index: 3; }
+  #bar div { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: rgba(255,255,255,.75); }
+  #adds { position: fixed; right: 20px; bottom: 22px; display: flex; gap: 10px; z-index: 3; }
+  #adds button { font: 14px system-ui, sans-serif; color: rgba(255,255,255,.75); background: rgba(0,0,0,.45);
+    border: 1px solid rgba(255,255,255,.28); border-radius: 999px; padding: 10px 18px; cursor: pointer; }
+  #adds button:hover, #adds button:focus-visible { color: #fff; border-color: rgba(255,255,255,.6); outline: none; }
+  #toast { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 4; font: 13px system-ui, sans-serif; color: #fff;
+    background: rgba(0,0,0,.65); padding: 8px 14px; border-radius: 999px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  /* ---------- şarkı listesi (minimal) ---------- */
+  #list { position: fixed; top: 16px; right: 20px; z-index: 5; text-align: right; font: 13px system-ui, sans-serif; }
+  #listBtn { font: 13px system-ui, sans-serif; color: rgba(255,255,255,.6); background: rgba(0,0,0,.35);
+    border: 1px solid rgba(255,255,255,.2); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  #listBtn:hover, #listBtn:focus-visible, #list.open #listBtn { color: #fff; border-color: rgba(255,255,255,.55); outline: none; }
+  #songs { display: none; margin-top: 8px; width: 240px; max-height: 60vh; overflow-y: auto; padding: 6px; text-align: left;
+    background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.14); border-radius: 12px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  #list.open #songs { display: block; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; color: rgba(255,255,255,.55); }
+  .row::before { content: ""; flex: none; width: 5px; height: 5px; border-radius: 50%; background: transparent; }
+  .row:hover { background: rgba(255,255,255,.07); color: rgba(255,255,255,.9); }
+  .row.on { color: #fff; }
+  .row.on::before { background: #fff; }
+  .row .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .x { flex: none; font: 15px/1 system-ui, sans-serif; color: rgba(255,255,255,.7); background: none; border: 0;
+    border-radius: 999px; padding: 2px 6px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+  .row:hover .x, .row .x:focus-visible, .row .x.arm { opacity: 1; }
+  .row .x.arm { font-size: 12px; color: #fff; background: rgba(255,90,80,.55); }
+  @media (hover: none) { .row .x { opacity: .5; } }
+  .row { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .row.hole { visibility: hidden; }
+  .row.ghost { position: fixed; z-index: 20; margin: 0; pointer-events: none; font: 13px system-ui, sans-serif; color: #fff;
+    background: rgba(40,40,48,.95); border: 1px solid rgba(255,255,255,.3); box-shadow: 0 12px 30px rgba(0,0,0,.6); transform: scale(1.04); cursor: grabbing; }
+  .row.ghost .x { display: none; }
+  .row.ghost .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #list.sorting, #list.sorting * { cursor: grabbing; }
+  #list.sorting .row:hover { background: none; }
+  #addSong { display: block; width: 100%; margin-top: 4px; padding: 8px; background: none; border: 0;
+    border-top: 1px solid rgba(255,255,255,.1); color: rgba(255,255,255,.6); text-align: left; cursor: pointer; font: 13px system-ui, sans-serif; }
+  #addSong:hover, #addSong:focus-visible { color: #fff; outline: none; }
+  #drop { position: fixed; inset: 0; display: none; place-items: center; background: rgba(0,0,0,.85); z-index: 9; font-size: 24px; }
+  #drop.show { display: grid; }
+  @media (max-width: 700px) { #rec { transform: scale(.72); transform-origin: 0 100%; left: -80px; bottom: -80px; } }
+  @media (prefers-reduced-motion: reduce) { .photo { animation: none; } .fx, .fx .ch { animation: none !important; opacity: 1 !important; } }
+</style>
+</head>
+<body>
+
+<div class="photo" id="pA"></div>
+<div class="photo" id="pB"></div>
+<div id="shade"></div>
+<div id="vig"></div>
+<div id="stage"></div>
+<div id="status"></div>
+<div id="now"></div>
+<div id="credit"></div>
+
+<div id="rec" title="Plağı çevir: saat yönü ileri, ters yön geri sarar. Tıkla: durdur / oynat">
+  <div id="wheel"></div>
+  <div id="sheen"></div>
+  <div id="hub"><i></i></div>
+  <div id="needle"><b></b></div>
+</div>
+
+<div id="bar"><div id="fill"></div></div>
+<div id="adds">
+  <button id="tapB" type="button" title="Şarkı çalarken her kelime başlarken Enter'a bas (ya da ekrana dokun). Geri al: Backspace. Çıkış: Esc. Shift+tıkla: kayıtlı kelime zamanlarını sil">● Kelime kaydı</button>
+  <button id="addBg" type="button">+ Arka plan</button>
+</div>
+<div id="list">
+  <button id="listBtn" type="button" title="Şarkı listesi">♫ 0</button>
+  <div id="songs">
+    <div id="rows"></div>
+    <button id="addSong" type="button">+ şarkı ekle</button>
+  </div>
+</div>
+<div id="toast"></div>
+<input id="file" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.lrc" multiple hidden>
+<input id="fileBg" type="file" accept="image/*" hidden>
+<div id="drop">Dosyaları bırak</div>
+
+<script>
+(() => {
+  const N = 40, TURN = 30;   // TURN: plağın bir tam turu = 30 sn
+  const HOPE_BG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEBLAEsAAD/4QDmRXhpZgAASUkqAAgAAAADAA4BAgCcAAAAMgAAABoBBQABAAAAzgAAABsBBQABAAAA1gAAAAAAAAAzZCByZW5kZXJlZCBmbGlnaHQgYWJvdmUgdGhlIGNsb3Vkcywgc2VhbWxlc3NseSBsb29wYWJsZS4gUGVyZmVjdGx5IHVzYWJsZSBmb3IgYSB3aWRlIHJhbmdlIG9mIHRvcGljcyByZWxhdGVkIHRvIG1ldGVvcm9sb2d5LCBkcmVhbXMsIHNsZWVwIG9yIHNwaXJpdHVhbGl0eS4sAQAAAQAAACwBAAABAAAA/+EF7Wh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8APD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyI+Cgk8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgoJCTxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiIHhtbG5zOnBob3Rvc2hvcD0iaHR0cDovL25zLmFkb2JlLmNvbS9waG90b3Nob3AvMS4wLyIgeG1sbnM6SXB0YzR4bXBDb3JlPSJodHRwOi8vaXB0Yy5vcmcvc3RkL0lwdGM0eG1wQ29yZS8xLjAveG1sbnMvIiAgIHhtbG5zOkdldHR5SW1hZ2VzR0lGVD0iaHR0cDovL3htcC5nZXR0eWltYWdlcy5jb20vZ2lmdC8xLjAvIiB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iIHhtbG5zOnBsdXM9Imh0dHA6Ly9ucy51c2VwbHVzLm9yZy9sZGYveG1wLzEuMC8iICB4bWxuczppcHRjRXh0PSJodHRwOi8vaXB0Yy5vcmcvc3RkL0lwdGM0eG1wRXh0LzIwMDgtMDItMjkvIiB4bWxuczp4bXBSaWdodHM9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9yaWdodHMvIiBwaG90b3Nob3A6Q3JlZGl0PSJHZXR0eSBJbWFnZXMiIEdldHR5SW1hZ2VzR0lGVDpBc3NldElEPSIyMTcyNDE3NDE3IiB4bXBSaWdodHM6V2ViU3RhdGVtZW50PSJodHRwczovL3d3dy5nZXR0eWltYWdlcy5jb20vZXVsYT91dG1fbWVkaXVtPW9yZ2FuaWMmYW1wO3V0bV9zb3VyY2U9Z29vZ2xlJmFtcDt1dG1fY2FtcGFpZ249aXB0Y3VybCIgcGx1czpEYXRhTWluaW5nPSJodHRwOi8vbnMudXNlcGx1cy5vcmcvbGRmL3ZvY2FiL0RNSS1QUk9ISUJJVEVELUVYQ0VQVFNFQVJDSEVOR0lORUlOREVYSU5HIiA+CjxkYzpjcmVhdG9yPjxyZGY6U2VxPjxyZGY6bGk+REtvc2lnPC9yZGY6bGk+PC9yZGY6U2VxPjwvZGM6Y3JlYXRvcj48ZGM6ZGVzY3JpcHRpb24+PHJkZjpBbHQ+PHJkZjpsaSB4bWw6bGFuZz0ieC1kZWZhdWx0Ij4zZCByZW5kZXJlZCBmbGlnaHQgYWJvdmUgdGhlIGNsb3Vkcywgc2VhbWxlc3NseSBsb29wYWJsZS4gUGVyZmVjdGx5IHVzYWJsZSBmb3IgYSB3aWRlIHJhbmdlIG9mIHRvcGljcyByZWxhdGVkIHRvIG1ldGVvcm9sb2d5LCBkcmVhbXMsIHNsZWVwIG9yIHNwaXJpdHVhbGl0eS48L3JkZjpsaT48L3JkZjpBbHQ+PC9kYzpkZXNjcmlwdGlvbj4KPHBsdXM6TGljZW5zb3I+PHJkZjpTZXE+PHJkZjpsaSByZGY6cGFyc2VUeXBlPSdSZXNvdXJjZSc+PHBsdXM6TGljZW5zb3JVUkw+aHR0cHM6Ly93d3cuZ2V0dHlpbWFnZXMuY29tL2RldGFpbC8yMTcyNDE3NDE3P3V0bV9tZWRpdW09b3JnYW5pYyZhbXA7dXRtX3NvdXJjZT1nb29nbGUmYW1wO3V0bV9jYW1wYWlnbj1pcHRjdXJsPC9wbHVzOkxpY2Vuc29yVVJMPjwvcmRmOmxpPjwvcmRmOlNlcT48L3BsdXM6TGljZW5zb3I+CgkJPC9yZGY6RGVzY3JpcHRpb24+Cgk8L3JkZjpSREY+CjwveDp4bXBtZXRhPgo8P3hwYWNrZXQgZW5kPSJ3Ij8+Cv/tAOJQaG90b3Nob3AgMy4wADhCSU0EBAAAAAAA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RkqShtl/so06stdJXat4NWZwqSptvBDAs8N20vjqVoZa85znLFJts9Bsd5Kvh2u6VKtSbVvebXt8LxmvUrLhkYAEJeslnP8AFZ/ufZqlGvKW0j723lrTlCWN5LFF8bp/oYOttNxt0nVpSgnk2vS781dX5Zno4bqFXt89vCTpypyVWHq+d2tJZdOeZs9j3MJTnt901KhOM7wlq3JrON9FJZpmrrY3nsSbSsWcrxQzJdx2a2O5dKM8cXGM4StZuM1dXXVLMxyuclvK6pOwhgUQUIRS06AACGMYAIBgRQADAgAGAwABiGADsxiGADGhDABjEAAMYhgAxkjABiACoBAAgABAAAIQxABIhiABCGIAEIYABIihABIDEACPfdnodv7dtNv3LdSk6lX+xGlTcFKOnpUrNZp31y4HhqdGrXlhpU51JWbtCLk7LjaKZ7fv0Kns9slhjCn/AFKeCmouOCX77qys3LU1r6s+s7eF+NFfUHcI+j3pOndelRjHRZJWjoZPYbbsMq1bdbqrCon/ALIba0opO3yPSKfM8Y+hyehr31hjH58dHte6d8glH+go7eUsMm4U4QlDDdRjG0Fbzu2ee23ca95Lc1qlak01KnOTknd3yldZpMxDZDN29545sTXnfW2Vf/FutitWjTwr/VFp+rj65a26aHGvttvOMf6iqSl63LFKLbitb4VFW0+JjrAro1ifGWe/W0+1U19E9M/S9LEzhKDwyi4vpJNP4MzW07puNpdJqcbP0yV1+p0qb+nu5ze5oxnKV8M4+iUL55L1W/ankw3+uYox+e5jzxlu3bqlt/ejUUv9qhFSj+20rnOexqOtCnQvW93Wml83/wBlw/A2Y9m7lGScttVik027XsrrW3ExOVfzWr2J+p9bG8oVKNaUai168GuDXmjRse07z27cVKkKySbnTjihiV00knZO3wPL1dtWpaypySX7rXj/APJaGq1YkZ1sadjg1qd2zkYGxzIOjIIKIJLJIKiRFABQgGAAQ0Q5O1uB1ObADkVGLnJRirt5IkydD00HOFsV3GTzaTyt0RFipU0sG3U23im04q2UervzNRpHXCPCBFQMQwAZRIwA3aM0tGZmhXwKyPOo7KTNyssWNM+97UjxtczFOrS3NF0s7x48WeLxXepmdlK80r2OsrE9cbMOl8cNxsPai7xyT15mBs0e6lUlOUqbScWt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";
+  function dataBlob(u) {
+    const [h, b] = u.split(","), bin = atob(b), a = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+    return new Blob([a], { type: /data:([^;]+)/.exec(h)[1] });
+  }
+  const PRESETS = [
+    { title: "Meant to Be", key: "meanttobe", hint: "Bebe Rexha", glow: "255,205,130", q: "golden hour field sunset" },
+    { title: "505", key: "505", hint: "Arctic Monkeys", glow: "255,150,100", q: "desert sunset Arizona" },
+    { title: "One That Got Away", key: "onethatgotaway", hint: "", glow: "255,160,210", q: "pink purple sky dusk" },
+    { title: "We Are the People Who Rule the World", key: "wearethepeoplewhoruletheworld", hint: "", glow: "255,228,165", q: "crepuscular rays golden clouds" },
+    { title: "Hope", key: "hope", hint: "XXXTENTACION", glow: "165,195,255", q: "starry night sky moon", bgData: HOPE_BG },
+    { title: "Revenge", key: "revenge", hint: "XXXTENTACION", glow: "255,85,70", q: "lava eruption night" },
+    { title: "This I Love", key: "thisilove", hint: "Guns N' Roses", glow: "255,170,110", q: "dramatic sunset sky clouds" },
+  ];
+  // Dosyanın içine gömülü şarkılar: { key, audio: "data:audio/mpeg;base64,...", lrc: "[00:10.00]..." }
+  const BUILTIN = [];
+  const slots = Array.from({ length: N }, (_, i) => ({
+    title: "", key: null, hint: "", glow: "200,175,255", q: "night sky stars milky way",
+    ...(PRESETS[i] || {}), url: null, blob: null, lines: null, base: null, bg: null, credit: "", bgJob: null, bgUser: false, offset: 0 }));
+  slots.forEach(s => { if (s.bgData) s.bg = dataBlob(s.bgData); });
+  const keyOrder = slots.filter(s => s.key).sort((a, b) => b.key.length - a.key.length);
+
+  const $ = id => document.getElementById(id);
+  const root = document.documentElement;
+  const rec = $("rec"), wheel = $("wheel"), stage = $("stage"), status = $("status"), now = $("now"), fill = $("fill"), shade = $("shade"), credit = $("credit");
+  const audio = new Audio(); audio.preload = "auto";
+  const norm = s => s.toLowerCase().replace(/ı/g, "i").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const mod = (a, n) => ((a % n) + n) % n;
+  const R_ = (a, b) => a + Math.random() * (b - a);
+
+  /* ================= kalıcı depolama (internetsiz kullanım) ================= */
+  let db;
+  const idb = () => new Promise((res, rej) => {
+    if (db) return res(db);
+    const r = indexedDB.open("plak", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("s");
+    r.onsuccess = () => { db = r.result; res(db); };
+    r.onerror = () => rej(r.error);
+  });
+  async function save(i) {
+    try {
+      const s = slots[i], d = await idb();
+      d.transaction("s", "readwrite").objectStore("s").put({ blob: s.blob, title: s.title, base: s.base, lines: s.lines, bg: s.bg, credit: s.credit, bgUser: s.bgUser, offset: s.offset }, i);
+    } catch {}
+  }
+  async function restore() {
+    try {
+      const d = await idb();
+      await new Promise(res => {
+        const req = d.transaction("s").objectStore("s").openCursor();
+        req.onerror = () => res();
+        req.onsuccess = () => {
+          const c = req.result; if (!c) return res();
+          if (c.key === "order") { seq = Array.isArray(c.value) ? c.value : []; return c.continue(); }
+          const s = slots[c.key], v = c.value;
+          if (s) {
+            if (v.blob) { s.blob = v.blob; s.url = URL.createObjectURL(v.blob); }
+            if (!s.key) s.title = v.title || "";
+            s.base = v.base; s.lines = v.lines || null; s.offset = v.offset || 0;
+            if (v.bgUser || !s.bgData) { s.bg = v.bg || null; s.credit = v.credit || ""; s.bgUser = !!v.bgUser; }
+          }
+          c.continue();
+        };
+      });
+    } catch {}
+    for (const b of BUILTIN) {
+      const s = slots.find(x => x.key === b.key); if (!s) continue;
+      if (!s.url) { s.blob = dataBlob(b.audio); s.url = URL.createObjectURL(s.blob); s.base = norm(s.title); }
+      if (!s.lines && b.lrc) s.lines = parseLRC(b.lrc);
+    }
+    // songs/manifest.json: GitHub Pages'te şarkıları otomatik yükler
+    try {
+      const man = await (await fetch("songs/manifest.json", { cache: "no-cache" })).json();
+      for (const m of man) {
+        const s = slots.find(x => x.key === m.key); if (!s) continue;
+        if (!s.url) { s.url = "songs/" + m.file; s.base = norm(s.title); }
+        if (!s.lines && m.lrc) {
+          try { s.lines = parseLRC(await (await fetch("songs/" + m.lrc)).text()); } catch {}
+        }
+      }
+    } catch {}
+    renderList();
+    if (order.length) choose(order[0], false); else list.classList.add("open");
+  }
+
+  /* ================= şarkı listesi (sağ üstte, minimal) ================= */
+  let order = [], seq = [], cur = -1, loaded = -1, R = 0;
+  const list = $("list"), rowsEl = $("rows");
+  const fmt = t => { t = Math.max(0, Math.round(t || 0)); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
+  const setWheel = () => { wheel.style.transform = `rotate(${R}deg)`; };
+  const paintList = () => rowsEl.querySelectorAll(".row").forEach(r => r.classList.toggle("on", +r.dataset.i === cur));
+  function renderList() {
+    const have = slots.map((s, i) => s.url ? i : -1).filter(i => i >= 0);
+    order = [...seq.filter(i => have.includes(i)), ...have.filter(i => !seq.includes(i))];   // yeni şarkılar sona
+    seq = order.slice();
+    $("listBtn").textContent = "♫ " + order.length;
+    rowsEl.textContent = "";
+    order.forEach(si => {
+      const row = document.createElement("div"); row.className = "row"; row.dataset.i = si;
+      const t = document.createElement("span"); t.className = "t"; t.textContent = slots[si].title; t.title = slots[si].title;
+      const x = document.createElement("button"); x.className = "x"; x.type = "button"; x.textContent = "×"; x.title = "Listeden çıkar";
+      row.append(t, x); rowsEl.appendChild(row);
+    });
+    paintList();
+  }
+  function setCur(si) { cur = si; paintList(); now.textContent = slots[si].title; }
+  async function saveOrder() { try { const d = await idb(); d.transaction("s", "readwrite").objectStore("s").put(order.slice(), "order"); } catch {} }
+  async function dropStored(i) { try { const d = await idb(); d.transaction("s", "readwrite").objectStore("s").delete(i); } catch {} }
+  function removeSong(i) {
+    const s = slots[i], oldUrl = s.url, wasLoaded = loaded === i, wasPlaying = !audio.paused;
+    const at = order.indexOf(i);
+    s.url = null; s.blob = null; s.lines = null; s.base = null; s.offset = 0;
+    s.bg = s.bgData ? dataBlob(s.bgData) : null; s.credit = ""; s.bgUser = false;
+    if (!s.key) s.title = "";
+    dropStored(i);
+    renderList(); saveOrder();
+    if (wasLoaded) {
+      loaded = -1; cur = -1;
+      const nx = order[at] !== undefined ? order[at] : order[0];
+      if (nx !== undefined) choose(nx, wasPlaying);
+      else {
+        audio.pause(); audio.removeAttribute("src"); audio.load(); scBuf = null; scBlob = null;
+        rec.classList.remove("playing"); fill.style.width = "0%"; now.textContent = ""; clearPhoto();
+        setMessage("Şarkı dosyalarını (mp3) bu pencereye bırak."); list.classList.add("open");
+      }
+    }
+    if (oldUrl) setTimeout(() => URL.revokeObjectURL(oldUrl), 1500);
+  }
+  $("listBtn").addEventListener("click", () => list.classList.toggle("open"));
+  document.addEventListener("pointerdown", e => { if (!list.contains(e.target)) list.classList.remove("open"); });
+  /* --- sürükleyerek sıralama: satır elde serbestçe gezer, bırakılan yere en yakın sıraya oturur --- */
+  const box = $("songs");
+  let drag = null, noClick = false;
+  rowsEl.addEventListener("pointerdown", e => {
+    const row = e.target.closest(".row");
+    if (!row || drag || e.button !== 0 || e.target.closest(".x")) return;
+    noClick = false;
+    if (e.pointerType === "mouse") e.preventDefault();
+    drag = { row, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, ghost: null, timer: 0, raf: 0, touch: e.pointerType !== "mouse" };
+    if (drag.touch) drag.timer = setTimeout(lift, 280);       // dokunmatikte: basılı tut, sonra taşı
+  });
+  function lift() {
+    if (!drag || drag.ghost) return;
+    const r = drag.row.getBoundingClientRect(), g = drag.row.cloneNode(true);
+    g.classList.add("ghost"); g.style.width = r.width + "px";
+    drag.dx = drag.x0 - r.left; drag.dy = drag.y0 - r.top; drag.h = r.height; drag.ghost = g;
+    document.body.appendChild(g); drag.row.classList.add("hole"); list.classList.add("sorting");
+    moveGhost(); autoScroll();
+  }
+  function moveGhost() {
+    const g = drag.ghost;
+    g.style.left = drag.x - drag.dx + "px"; g.style.top = drag.y - drag.dy + "px";
+    // boşluğu, taşınan satırın ortasına göre yerleştir (liste dışında da çalışır)
+    const mid = drag.y - drag.dy + drag.h / 2;
+    const others = [...rowsEl.children].filter(r => r !== drag.row);
+    const top = rowsEl.getBoundingClientRect().top;
+    const before = others.find(r => mid < top + r.offsetTop - rowsEl.offsetTop + r.offsetHeight / 2) || null;
+    if (drag.row.nextElementSibling === before) return;
+    const old = new Map(others.map(r => [r, r.getBoundingClientRect().top]));
+    rowsEl.insertBefore(drag.row, before);
+    others.forEach(r => {                                     // diğerleri yumuşakça kayar
+      const d = old.get(r) - r.getBoundingClientRect().top;
+      if (d && r.animate) r.animate([{ transform: `translateY(${d}px)` }, { transform: "none" }], { duration: 160, easing: "ease-out" });
+    });
+  }
+  function autoScroll() {
+    if (!drag || !drag.ghost) return;
+    const b = box.getBoundingClientRect();
+    if (drag.x >= b.left && drag.x <= b.right) {
+      const v = drag.y < b.top + 32 ? -6 : drag.y > b.bottom - 32 ? 6 : 0;
+      if (v) { const was = box.scrollTop; box.scrollTop += v; if (box.scrollTop !== was) moveGhost(); }
+    }
+    drag.raf = requestAnimationFrame(autoScroll);
+  }
+  addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.ghost) { moveGhost(); return; }
+    if (Math.hypot(drag.x - drag.x0, drag.y - drag.y0) < (drag.touch ? 10 : 4)) return;
+    if (drag.touch) { clearTimeout(drag.timer); drag = null; } else lift();   // dokunmatikte erken hareket = kaydırma
+  });
+  function endDrag(commit) {
+    if (!drag) return;
+    const d = drag; drag = null; clearTimeout(d.timer); cancelAnimationFrame(d.raf);
+    if (!d.ghost) return;
+    noClick = true; setTimeout(() => { noClick = false; }, 60);
+    d.ghost.remove(); d.row.classList.remove("hole"); list.classList.remove("sorting");
+    if (commit) { seq = [...rowsEl.children].map(r => +r.dataset.i); order = seq.slice(); saveOrder(); }
+    else renderList();
+  }
+  addEventListener("pointerup", e => { if (drag && e.pointerId === drag.id) endDrag(true); });
+  addEventListener("pointercancel", e => { if (drag && e.pointerId === drag.id) endDrag(false); });
+  addEventListener("keydown", e => { if (e.code === "Escape") endDrag(false); });
+  addEventListener("blur", () => endDrag(false));
+  rowsEl.addEventListener("touchmove", e => { if (drag && drag.ghost) e.preventDefault(); }, { passive: false });
+  rowsEl.addEventListener("contextmenu", e => e.preventDefault());
+
+  rowsEl.addEventListener("click", e => {
+    if (noClick) return;
+    const row = e.target.closest(".row"); if (!row) return;
+    const si = +row.dataset.i, x = e.target.closest(".x");
+    if (!x) { choose(si); return; }
+    if (x.classList.contains("arm")) { removeSong(si); return; }
+    x.classList.add("arm"); x.textContent = "sil?";
+    setTimeout(() => { x.classList.remove("arm"); x.textContent = "×"; }, 2500);
+  });
+
+  /* ================= fotoğraf arka plan ================= */
+  let layerOn = false, photoUrl = null;
+  const layers = [$("pA"), $("pB")];
+  let photoJob = 0;                          // en son istenen fotoğraf kazanır
+  function applyPhoto(blob, cr, onFail) {
+    const job = ++photoJob, url = URL.createObjectURL(blob), img = new Image();
+    img.onload = () => {
+      if (job !== photoJob) { URL.revokeObjectURL(url); return; }
+      const next = layers[layerOn ? 0 : 1], prev = layers[layerOn ? 1 : 0];
+      next.style.backgroundImage = `url(${url})`;
+      next.classList.add("on"); prev.classList.remove("on"); layerOn = !layerOn;
+      const old = photoUrl; if (old) setTimeout(() => URL.revokeObjectURL(old), 2000);
+      photoUrl = url; credit.textContent = cr ? "Fotoğraf: " + cr + " · Wikimedia Commons" : "";
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); if (job === photoJob && onFail) onFail(); };
+    img.src = url;
+  }
+  function clearPhoto() { photoJob++; layers.forEach(l => l.classList.remove("on")); credit.textContent = ""; }
+  // fotoğraf yoksa ve ekran boşsa: şarkının rengiyle yumuşak bir gökyüzü
+  function showFallback(s) {
+    if (layers.some(l => l.classList.contains("on"))) return;   // eski fotoğraf yerinde kalsın
+    const c = document.createElement("canvas"); c.width = 960; c.height = 540;
+    const g = c.getContext("2d");
+    g.fillStyle = "#0b0b14"; g.fillRect(0, 0, 960, 540);
+    [[620, 380, 620, .55], [180, 90, 460, .3]].forEach(([x, y, r, al]) => {
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, `rgba(${s.glow},${al})`); gr.addColorStop(1, `rgba(${s.glow},0)`);
+      g.fillStyle = gr; g.fillRect(0, 0, 960, 540);
+    });
+    c.toBlob(b => { if (b && slots[cur] === s && !layers.some(l => l.classList.contains("on"))) applyPhoto(b, ""); });
+  }
+  const strip = h => (h || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  async function findPhoto(query) {
+    const enc = encodeURIComponent;
+    const tries = [`${query} incategory:"Featured pictures on Wikimedia Commons" filetype:bitmap`, `${query} filetype:bitmap`];
+    for (const q of tries) {
+      const u = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=30" +
+        `&gsrsearch=${enc(q)}&prop=imageinfo&iiprop=url|size|mime|extmetadata&iiurlwidth=1920`;
+      const j = await (await fetch(u)).json();
+      const good = Object.values((j.query && j.query.pages) || {}).map(p => p.imageinfo && p.imageinfo[0])
+        .filter(i => i && /jpeg|png/.test(i.mime) && i.width >= i.height * 1.3 && i.width >= 1800 && i.thumburl)
+        .sort(() => Math.random() - .5).slice(0, 4);
+      for (const pick of good) {
+        try {
+          const r = await fetch(pick.thumburl); if (!r.ok) continue;
+          const em = pick.extmetadata || {};
+          const cr = [strip(em.Artist && em.Artist.value), strip(em.LicenseShortName && em.LicenseShortName.value)].filter(Boolean).join(" · ");
+          return { blob: await r.blob(), credit: cr.slice(0, 120) };
+        } catch {}
+      }
+    }
+    return null;
+  }
+  // fotoğrafı indirip şarkıya kaydeder; aynı anda ikinci kez aramaz, başarısız olursa sonra yine dener
+  function loadPhoto(si) {
+    const s = slots[si];
+    if (s.bg || !navigator.onLine) return Promise.resolve();
+    if (!s.bgJob) s.bgJob = (async () => {
+      const url = s.url;
+      try {
+        const r = await findPhoto(s.q);
+        if (r && !s.bg && s.url === url) { s.bg = r.blob; s.credit = r.credit; save(si); }
+      } catch {}
+      s.bgJob = null;
+    })();
+    return s.bgJob;
+  }
+  async function ensurePhoto(si) {
+    const s = slots[si];
+    const show = () => applyPhoto(s.bg, s.credit, () => { s.bg = null; showFallback(s); });
+    if (s.bg) show();
+    else {
+      photoJob++;                              // bekleyen eski fotoğraf üstüne yazmasın
+      showFallback(s);
+      await loadPhoto(si);
+      if (loaded !== si) return;
+      if (s.bg) show(); else showFallback(s);
+    }
+    const nx = order[(order.indexOf(si) + 1) % order.length];   // sıradakini önceden hazırla
+    if (nx !== undefined && nx !== si) loadPhoto(nx);
+  }
+
+  /* ================= kelimeler ================= */
+  let words = [], shownIdx = -1, shown = null, fading = [], flow = null, tapMode = false;
+  function buildWords(ls) {
+    const out = [];
+    ls.forEach((l, k) => {
+      const text = (l.text || "").trim();
+      if (!text || /^[♪\s]+$/.test(text)) return;
+      const nextT = ls[k + 1] ? ls[k + 1].t : l.t + 6;
+      if (l.w && l.w.length) {   // kelime zamanları gerçek (kayıttan ya da Enhanced LRC'den)
+        l.w.forEach((o, j) => {
+          const last = j === l.w.length - 1;
+          const end = last ? Math.max(o.t + .3, Math.min(nextT - .05, o.t + 1.2)) : Math.max(o.t, l.w[j + 1].t);
+          out.push({ t: o.t, end, text: o.text, last, line: k, hideAt: last ? Math.max(end + .5, Math.min(nextT - .05, end + 2.5)) : Infinity });
+        });
+        return;
+      }
+      const ws = text.split(/\s+/);
+      const avail = Math.max(0.4, nextT - l.t);
+      const syl = w => Math.max(1, (w.toLowerCase().replace(/e$/, "").match(/[aeiouyıöü]+/g) || []).length);
+      const sy = ws.reduce((a, w) => a + syl(w), 0);
+      const span = Math.min(avail * 0.97, sy * 0.2 + 0.3);
+      const weights = ws.map(w => syl(w) + .35 + (/[,.;:!?]$/.test(w) ? .9 : 0)), total = weights.reduce((a, b) => a + b, 0);
+      let acc = 0;
+      ws.forEach((w, j) => {
+        const t = l.t + span * acc / total; acc += weights[j];
+        const end = l.t + span * acc / total, last = j === ws.length - 1;
+        // ara kelimeler bir sonraki kelime gelince değişir; satır sonu kelimesi satır bitene kadar kalır
+        out.push({ t, end, text: w, last, line: k, hideAt: last ? Math.max(end + .5, Math.min(nextT - .05, end + 2.5)) : Infinity });
+      });
+    });
+    return out;
+  }
+  function setLyrics(ls) { words = buildWords(ls); shownIdx = -1; hideWord(); status.style.opacity = 0; }
+  function setMessage(t) { words = []; shownIdx = -1; hideWord(); status.textContent = t; status.style.opacity = 1; }
+
+  const FX = ["slam", "drop", "stretch", "rise", "flip", "scatter", "type"];
+  const LETTER_FX = new Set(["drop", "scatter", "type"]);
+  const recent = [];
+  function hideWord() {
+    if (!shown) return;
+    const el = shown.wrap; el.classList.add("out"); fading.push(el);
+    setTimeout(() => { el.remove(); fading = fading.filter(x => x !== el); }, 1350);
+    while (fading.length > 5) fading.shift().remove();
+    shown = null;
+  }
+  function showWord(w) {
+    hideWord();
+    const text = w.text.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "") || w.text;
+    const big = text.length >= 5 || w.last;
+    let name;
+    const pool = big && Math.random() < .4 ? [...FX, "shake"] : FX;
+    do { name = pool[Math.floor(Math.random() * pool.length)]; } while (recent.includes(name));
+    recent.push(name); if (recent.length > 3) recent.shift();
+    const vw = innerWidth, vh = innerHeight, sc = Math.min(vw, vh) / 900;
+    const shownText = big ? text.toUpperCase() : text.toLowerCase();
+    const wrap = document.createElement("div"); wrap.className = "word";
+    const fx = document.createElement("span"); fx.className = "fx " + (big ? "big " : "small ") + "fx-" + name;
+    if (LETTER_FX.has(name)) {
+      [...shownText].forEach((c, i) => {
+        const s = document.createElement("span"); s.className = "ch"; s.textContent = c;
+        s.style.setProperty("--i", i);
+        s.style.setProperty("--dx", R_(-160, 160) + "px"); s.style.setProperty("--dy", R_(-140, 140) + "px"); s.style.setProperty("--r", R_(-120, 120) + "deg");
+        fx.appendChild(s);
+      });
+    } else fx.textContent = shownText;
+    const len = Math.max(shownText.length, 2);
+    const size = big ? Math.min(R_(95, 150) * sc, vw * .5 / (len * .5)) : Math.min(R_(42, 62) * sc, vw * .5 / (len * .5));
+    fx.style.fontSize = Math.max(big ? 64 : 30, size) + "px";
+    wrap.appendChild(fx); stage.appendChild(wrap);
+    let bw = wrap.offsetWidth, bh = wrap.offsetHeight;
+    if (bw > vw * .9) { fx.style.fontSize = parseFloat(fx.style.fontSize) * vw * .9 / bw + "px"; bw = wrap.offsetWidth; bh = wrap.offsetHeight; }
+    // Her satır rastgele bir bantta başlar, satırın kelimeleri soldan sağa okuma sırasıyla dizilir.
+    const m = 28, rc = { x: 100, y: vh - 100 }, recR = 250;
+    const px = parseFloat(fx.style.fontSize);
+    if (!flow || flow.k !== w.line) {
+      let y = vh * .45;
+      for (let k = 0; k < 12; k++) {
+        y = R_(.24, .64) * vh;
+        if (!flow || Math.abs(y - flow.y) > vh * .2) break;
+      }
+      let left = R_(.08, .3) * vw;
+      if (y > vh - 360) left = Math.max(left, 330);
+      flow = { k: w.line, x: left, left, y, rowH: 0 };
+    }
+    if (flow.x + bw > vw - m) {                       // satır sığmadı: bir alt satıra geç
+      flow.y += flow.rowH * 1.08; flow.x = flow.left; flow.rowH = 0;
+    }
+    let cx = flow.x + bw / 2;
+    let cy = flow.y + R_(-6, 6);
+    cy = Math.min(Math.max(cy, m + 40 + bh / 2), vh - m - bh / 2);
+    for (let k = 0; k < 20 && Math.hypot(cx - rc.x, cy - rc.y) < recR + Math.min(bw, bh) / 2; k++) cx += 40;   // plağın üstüne gelme
+    cx = Math.min(cx, vw - m - bw / 2);
+    flow.x = cx + bw / 2 + px * .3;
+    flow.rowH = Math.max(flow.rowH, bh);
+    shown = { wrap, bw, bh, cx, cy, rot: Math.random() < .3 ? R_(-1.5, 1.5) : 0, hideAt: w.hideAt };
+  }
+
+  /* ================= ritim analizi ================= */
+  let ac, an, fbuf, avg = 0, lastBeat = 0, beat = 0;
+  function ensureAudio() {
+    if (ac) { if (ac.state === "suspended") ac.resume(); return; }
+    try {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      const src = ac.createMediaElementSource(audio);
+      an = ac.createAnalyser(); an.fftSize = 512; an.smoothingTimeConstant = .55;
+      src.connect(an); an.connect(ac.destination);
+      fbuf = new Uint8Array(an.frequencyBinCount);
+    } catch { ac = null; an = null; }
+  }
+
+  /* ================= sararken plak sesi ================= */
+  const REV = 200;                           // 33⅓ devir: saniyede 200 derece = normal hız
+  let scBuf = null, scBlob = null, scNode = null;
+  const sc = { on: false, pos: 0, rate: 0, want: 0, gain: 0, last: 0, until: 0, noise: 0 };
+  async function prepareScratch() {
+    const blob = loaded >= 0 ? slots[loaded].blob : null;
+    if (!ac || !blob || blob === scBlob) return;
+    scBlob = blob; scBuf = null;
+    try {
+      const buf = await ac.decodeAudioData(await blob.arrayBuffer());
+      if (scBlob === blob) scBuf = buf;
+    } catch { if (scBlob === blob) scBlob = null; }
+  }
+  function ensureScratchNode() {
+    if (scNode || !ac) return;
+    scNode = ac.createScriptProcessor(1024, 0, 2);
+    scNode.onaudioprocess = e => {
+      const out = [e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1)];
+      const now_ = performance.now();
+      const live = sc.on || now_ < sc.until;
+      const want = !live || (sc.on && now_ - sc.last > 70) ? 0 : sc.want;   // el durunca ses de durur
+      if (!scBuf || (!live && sc.gain < .001)) { out[0].fill(0); out[1].fill(0); sc.gain = 0; sc.rate = 0; return; }
+      const ch = [scBuf.getChannelData(0), scBuf.getChannelData(scBuf.numberOfChannels > 1 ? 1 : 0)];
+      const step = scBuf.sampleRate / ac.sampleRate, len = scBuf.length;
+      for (let i = 0; i < out[0].length; i++) {
+        sc.rate += (want - sc.rate) * .0025;
+        const v = Math.abs(sc.rate);
+        sc.gain += (Math.min(1, v * 2.5) - sc.gain) * .006;
+        sc.pos = Math.max(0, Math.min(len - 2, sc.pos + sc.rate * step));
+        const k = Math.floor(sc.pos), f = sc.pos - k;
+        // iğne hışırtısı ve ara sıra çıtırtı
+        sc.noise += ((Math.random() * 2 - 1) - sc.noise) * .25;
+        const dust = sc.noise * .025 * Math.min(1.5, v) + (Math.random() < .00025 * v ? (Math.random() - .5) * .35 : 0);
+        for (let c = 0; c < 2; c++) out[c][i] = ((ch[c][k] * (1 - f) + ch[c][k + 1] * f) * .85 + dust) * sc.gain;
+      }
+    };
+    scNode.connect(ac.destination);
+  }
+  function scratchStart(t) {
+    ensureScratchNode(); prepareScratch();
+    sc.on = true; sc.want = 0; sc.rate = 0; sc.last = performance.now();
+    if (scBuf) sc.pos = t * scBuf.sampleRate;
+  }
+  // deg: parmağın döndürdüğü açı, ms: geçen süre, t: şarkıda gelinen yer
+  function scratchMove(deg, ms, t) {
+    const r = Math.max(-4, Math.min(4, deg / (Math.max(8, ms) / 1000) / REV));
+    sc.want = sc.want * .35 + r * .65; sc.last = performance.now();
+    if (scBuf && Math.abs(sc.pos / scBuf.sampleRate - t) > 4) { sc.pos = t * scBuf.sampleRate; sc.gain = 0; }
+  }
+  const scratchStop = () => { sc.on = false; sc.want = 0; sc.until = 0; };
+  // ok tuşları ve fare tekerleği için kısa bir "vınn"
+  function scratchBlip(from, dir) {
+    ensureScratchNode(); prepareScratch();
+    if (sc.on || !scBuf) return;
+    sc.pos = from * scBuf.sampleRate; sc.want = dir * 2.4; sc.until = performance.now() + 170;
+  }
+
+  /* ================= ana döngü ================= */
+  let lastF = performance.now();
+  function frame(ts) {
+    const dt = Math.min(.05, (ts - lastF) / 1000); lastF = ts;
+    if (an && !audio.paused) {
+      an.getByteFrequencyData(fbuf);
+      const low = (fbuf[1] + fbuf[2] + fbuf[3] + fbuf[4]) / 4;
+      if (low > avg * 1.28 && low > 110 && ts - lastBeat > 140) { beat = 1; lastBeat = ts; }
+      avg = avg * .97 + low * .03;
+    }
+    beat *= Math.pow(.88, dt * 60);
+    root.style.setProperty("--b", beat.toFixed(3));
+    shade.style.opacity = (.42 - beat * .14).toFixed(3);
+
+    if (words.length && !tapMode) {
+      const t = audio.currentTime + 0.04 - (loaded >= 0 ? slots[loaded].offset : 0);
+      let lo = 0, hi = words.length - 1, idx = -1;
+      while (lo <= hi) { const m = (lo + hi) >> 1; if (words[m].t <= t) { idx = m; lo = m + 1; } else hi = m - 1; }
+      if (idx !== shownIdx) {
+        shownIdx = idx;
+        if (idx >= 0 && t < words[idx].hideAt) showWord(words[idx]); else hideWord();
+      } else if (shown && t > shown.hideAt) hideWord();
+    }
+    if (shown) {
+      const s = shown;
+      s.wrap.style.transform = `translate(${s.cx - s.bw / 2}px, ${s.cy - s.bh / 2}px) rotate(${s.rot}deg) scale(${1 + beat * .06})`;
+    }
+    if (audio.duration) fill.style.width = (audio.currentTime / audio.duration * 100) + "%";
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* ================= söz çekme ================= */
+  function parseLRC(text) {
+    const out = [];
+    for (const raw of text.split(/\r?\n/)) {
+      const tags = [...raw.matchAll(/\[(\d+):(\d+(?:[.:]\d+)?)\]/g)];
+      if (!tags.length) continue;
+      const body = raw.replace(/\[[^\]]*\]/g, "");
+      const txt = body.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+      const w = [...body.matchAll(/<(\d+):(\d+(?:[.:]\d+)?)>\s*([^<]*)/g)]
+        .map(m => ({ t: parseInt(m[1], 10) * 60 + parseFloat(m[2].replace(":", ".")), text: m[3].trim() })).filter(o => o.text);
+      for (const m of tags) out.push({ t: parseInt(m[1], 10) * 60 + parseFloat(m[2].replace(":", ".")), text: txt, ...(w.length ? { w } : {}) });
+    }
+    return out.sort((a, b) => a.t - b.t);
+  }
+  async function fetchLyrics(i) {
+    const s = slots[i], api = "https://lrclib.net/api/", enc = encodeURIComponent;
+    if (!audio.duration) await new Promise(r => { audio.addEventListener("loadedmetadata", r, { once: true }); setTimeout(r, 3000); });
+    const dur = audio.duration || 0;
+    const artists = [...new Set([s.hint, s.hint.charAt(0) + s.hint.slice(1).toLowerCase(), /xxx/i.test(s.hint) ? "XXXTentacion" : ""].filter(Boolean))];
+    const urls = [];
+    for (const a of artists) {
+      if (dur) urls.push({ u: `${api}get?track_name=${enc(s.title)}&artist_name=${enc(a)}&duration=${Math.round(dur)}`, exact: true });
+      urls.push({ u: `${api}search?track_name=${enc(s.title)}&artist_name=${enc(a)}` });
+    }
+    urls.push({ u: `${api}search?q=${enc((s.title + " " + s.hint).trim())}` });
+    urls.push({ u: `${api}search?q=${enc(s.title)}` });
+    let netFail = false, plain = null;
+    for (const { u, exact } of urls) {
+      try {
+        const r = await fetch(u); if (!r.ok) continue;
+        const d = await r.json();
+        const arr = (Array.isArray(d) ? d : [d]).filter(Boolean);
+        const near = arr.filter(x => exact || !dur || !x.duration || Math.abs(x.duration - dur) <= 15)
+          .sort((a, b) => Math.abs((a.duration || 0) - dur) - Math.abs((b.duration || 0) - dur));
+        const hit = near.find(x => x.syncedLyrics);
+        if (hit) {
+          s.lines = parseLRC(hit.syncedLyrics);
+          if (s.lines.length) { save(i); if (loaded === i) setLyrics(s.lines); return; }
+        }
+        if (!plain) plain = near.find(x => x.plainLyrics);
+      } catch { netFail = true; }
+    }
+    if (plain && dur) {
+      const rows = plain.plainLyrics.split(/\r?\n/).map(t => t.trim()).filter(Boolean);
+      const start = Math.min(8, dur * .05), span = dur * .88 - start;
+      s.lines = rows.map((text, k) => ({ t: start + span * k / rows.length, text }));
+      save(i); if (loaded === i) setLyrics(s.lines); return;
+    }
+    if (loaded === i) setMessage(netFail ? "Sözler indirilemedi. İnternet bağlantını kontrol et." : "Bu şarkının sözleri bulunamadı.");
+  }
+
+  /* ================= seçim ve oynatma ================= */
+  function choose(i, play = true, force = false) {
+    if (tapMode) exitTap();
+    setCur(i);
+    const s = slots[i];
+    if (!s.url) return;
+    if (loaded === i && audio.src && !force) { if (play && audio.paused) audio.play().catch(() => {}); return; }
+    loaded = i;
+    root.style.setProperty("--glow", s.glow);
+    ensurePhoto(i);
+    audio.src = s.url;
+    scBuf = null; scBlob = null; prepareScratch();
+    if (play) audio.play().catch(() => {});
+    if (s.lines) setLyrics(s.lines);
+    else if (s.hint) { setMessage("Sözler aranıyor…"); fetchLyrics(i); }
+    else setMessage("Bu şarkı için söz yok.");
+  }
+  const toggle = () => { if (audio.src) (audio.paused ? audio.play() : audio.pause()); };
+  const stepBy = d => { if (!order.length) return; const p = order.indexOf(cur); choose(order[mod((p < 0 ? 0 : p) + d, order.length)]); };
+  audio.addEventListener("play", () => { rec.classList.add("playing"); ensureAudio(); prepareScratch(); });
+  audio.addEventListener("pause", () => rec.classList.remove("playing"));
+  audio.addEventListener("ended", () => stepBy(1));
+
+  /* ================= plağı çevirerek ileri / geri sarma ================= */
+  let dragging = false, scrubbing = false, wasPlaying = false, lastA = 0, lastE = 0, moved = 0, tgt = 0, wt;
+  const angleOf = e => { const b = rec.getBoundingClientRect(); return Math.atan2(e.clientY - (b.top + b.height / 2), e.clientX - (b.left + b.width / 2)) * 180 / Math.PI; };
+  const showTime = t => { now.textContent = fmt(t) + " / " + fmt(audio.duration); };
+  const showTitle = () => { if (cur >= 0) now.textContent = slots[cur].title; };
+  function seekBy(sec) {
+    if (!audio.src || !audio.duration) return;
+    const nt = Math.max(0, Math.min(audio.duration - .05, audio.currentTime + sec));
+    ensureAudio(); scratchBlip(audio.currentTime, Math.sign(sec));
+    R += (nt - audio.currentTime) * 360 / TURN; audio.currentTime = nt; setWheel();
+    showTime(nt); clearTimeout(wt); wt = setTimeout(showTitle, 900);
+  }
+  rec.addEventListener("pointerdown", e => {
+    dragging = true; scrubbing = false; moved = 0; lastA = angleOf(e); tgt = audio.currentTime || 0;
+    lastE = e.timeStamp; if (audio.src) { ensureAudio(); prepareScratch(); }
+    wasPlaying = !audio.paused; rec.setPointerCapture(e.pointerId); rec.classList.add("drag");
+  });
+  rec.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    const a = angleOf(e); let d = a - lastA;
+    if (d > 180) d -= 360; if (d < -180) d += 360;
+    lastA = a; moved += Math.abs(d);
+    const ms = e.timeStamp - lastE; lastE = e.timeStamp;
+    if (!audio.src || !audio.duration) return;
+    if (!scrubbing) {
+      if (moved < 3) return;
+      scrubbing = true; rec.classList.add("scrub"); audio.pause(); scratchStart(tgt);
+    }
+    const nt = Math.max(0, Math.min(audio.duration - .05, tgt + d * TURN / 360));
+    R += (nt - tgt) * 360 / TURN; tgt = nt;
+    audio.currentTime = nt; setWheel(); showTime(nt); scratchMove(d, ms, nt);
+  });
+  const release = () => {
+    if (!dragging) return;
+    dragging = false; rec.classList.remove("drag", "scrub");
+    if (!scrubbing) { if (moved < 3) toggle(); return; }
+    scrubbing = false; scratchStop(); showTitle();
+    if (wasPlaying) audio.play().catch(() => {});
+  };
+  rec.addEventListener("pointerup", release);
+  rec.addEventListener("pointercancel", release);
+  rec.addEventListener("wheel", e => { e.preventDefault(); seekBy(e.deltaY > 0 ? 5 : -5); }, { passive: false });
+  let toastT;
+  function toast(t) { const el = $("toast"); el.textContent = t; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => { el.style.opacity = 0; }, 1800); }
+  /* ================= kelime kaydı (tuşla senkron) ================= */
+  const TAP_LAG = 0.09;   // insanın tepki gecikmesi
+  let tapList = [], tapLines = {}, tapRec = {}, tapIdx = 0;
+  const tapB = $("tapB");
+  function renderTap() {
+    status.textContent = "";
+    const it = tapList[tapIdx];
+    if (!it) return;
+    tapLines[it.k].forEach((w, j) => {
+      const sp = document.createElement("span");
+      sp.textContent = w + " ";
+      if (j < it.j) sp.style.opacity = .3;
+      if (j === it.j) { sp.style.color = "#fff"; sp.style.fontWeight = "700"; sp.style.textDecoration = "underline"; }
+      status.appendChild(sp);
+    });
+    status.style.opacity = 1;
+  }
+  function startTap() {
+    const s = loaded >= 0 ? slots[loaded] : null;
+    if (!s || !s.lines || !s.lines.length) { toast("Önce şarkıyı ve sözlerini yükle"); return; }
+    tapList = []; tapLines = {}; tapRec = {};
+    s.lines.forEach((l, k) => {
+      const text = (l.text || "").trim();
+      if (!text || /^[♪\s]+$/.test(text)) return;
+      const ws = text.split(/\s+/); tapLines[k] = ws;
+      ws.forEach((w, j) => tapList.push({ k, j, text: w }));
+    });
+    const t = audio.currentTime + .04 - s.offset;
+    tapIdx = tapList.findIndex(it => it.j === 0 && s.lines[it.k].t >= t - .05);
+    if (tapIdx < 0) { toast("Bu noktadan sonra söz yok, plağı geri sar"); return; }
+    tapMode = true; shownIdx = -1; hideWord();
+    audio.playbackRate = .85;
+    if (audio.paused) audio.play().catch(() => {});
+    tapB.textContent = "■ Bitir";
+    renderTap();
+    toast("Her kelime başlarken Enter'a bas (veya ekrana dokun) · Backspace: geri · Esc: bitir");
+  }
+  function exitTap() {
+    if (!tapMode) return;
+    tapMode = false; audio.playbackRate = 1; tapB.textContent = "● Kelime kaydı";
+    if (loaded >= 0) { save(loaded); setLyrics(slots[loaded].lines); }
+  }
+  function tap() {
+    const it = tapList[tapIdx]; if (!it) return;
+    const s = slots[loaded];
+    const arr = tapRec[it.k] || (tapRec[it.k] = []);
+    let t = audio.currentTime - TAP_LAG + .04 - s.offset;
+    if (arr.length && t < arr[arr.length - 1].t + .03) t = arr[arr.length - 1].t + .03;
+    arr.push({ t: Math.round(t * 100) / 100, text: it.text });
+    if (arr.length === tapLines[it.k].length) { s.lines[it.k].w = arr; delete tapRec[it.k]; }
+    tapIdx++;
+    if (tapIdx >= tapList.length) { exitTap(); toast("Tüm kelimeler kaydedildi"); return; }
+    renderTap();
+  }
+  function untap() {
+    if (tapIdx <= 0) return;
+    tapIdx--;
+    const it = tapList[tapIdx], l = slots[loaded].lines[it.k];
+    if (tapRec[it.k]) tapRec[it.k].pop();
+    else if (l.w) { tapRec[it.k] = l.w.slice(0, -1); delete l.w; }
+    audio.currentTime = Math.max(0, audio.currentTime - 2);
+    renderTap();
+  }
+  tapB.addEventListener("click", e => {
+    tapB.blur();
+    if (tapMode) { exitTap(); return; }
+    if (e.shiftKey) {
+      if (loaded >= 0 && slots[loaded].lines) { slots[loaded].lines.forEach(l => { delete l.w; }); save(loaded); setLyrics(slots[loaded].lines); toast("Kelime zamanları silindi"); }
+      return;
+    }
+    startTap();
+  });
+  addEventListener("pointerdown", e => { if (tapMode && !e.target.closest("#rec, #bar, #adds, #list, #toast")) tap(); });
+  addEventListener("keydown", e => {
+    if (tapMode) {
+      if (e.code === "Enter" || e.code === "KeyN") { e.preventDefault(); if (!e.repeat) tap(); return; }
+      if (e.code === "Backspace") { e.preventDefault(); untap(); return; }
+      if (e.code === "Escape") { exitTap(); return; }
+    }
+    if (e.code === "Space") { e.preventDefault(); toggle(); }
+    if (e.code === "ArrowRight") { if (e.shiftKey) stepBy(1); else seekBy(5); }
+    if (e.code === "ArrowLeft") { if (e.shiftKey) stepBy(-1); else seekBy(-5); }
+    if (e.code === "Escape") list.classList.remove("open");
+  });
+  $("bar").addEventListener("click", e => { if (audio.duration) audio.currentTime = e.clientX / innerWidth * audio.duration; });
+
+  /* ================= dosya yükleme ================= */
+  const isAudio = f => f.type.startsWith("audio") || /\.(mp3|m4a|wav|ogg|flac|aac)$/i.test(f.name);
+  const isImage = f => f.type.startsWith("image");
+  const isLrc = f => /\.lrc$/i.test(f.name);
+  const baseName = f => f.name.replace(/\.[^.]+$/, "");
+  async function addFiles(fileList) {
+    const files = [...fileList], touched = new Set(), extra = new Set();
+    let added = 0, full = 0;
+    for (const f of files.filter(isAudio)) {
+      const n = norm(baseName(f));
+      let s = keyOrder.find(p => n.includes(p.key)) || slots.find(x => !x.key && x.url && x.base === n) || slots.find((x, i) => i >= PRESETS.length && !x.url);
+      if (!s) { full++; continue; }
+      s.blob = f; s.url = URL.createObjectURL(f); s.base = n; s.lines = null;
+      if (!s.key) s.title = baseName(f);
+      touched.add(slots.indexOf(s)); added++;
+    }
+    for (const f of files.filter(isLrc)) {
+      const n = norm(baseName(f));
+      const s = keyOrder.find(p => n.includes(p.key)) || slots.find(x => x.base && x.base === n);
+      if (s) { s.lines = parseLRC(await f.text()); touched.add(slots.indexOf(s)); }
+    }
+    const img = files.find(isImage);
+    if (img && cur >= 0) { slots[cur].bg = img; slots[cur].credit = ""; slots[cur].bgUser = true; extra.add(cur); if (cur === loaded) applyPhoto(img, ""); }
+    new Set([...touched, ...extra]).forEach(save);
+    renderList(); saveOrder();
+    if (added) toast(added + " şarkı eklendi");
+    if (full) toast("Liste dolu, " + full + " şarkı eklenemedi");
+    if (loaded < 0 && order.length) choose(order[0], false);
+    else if (touched.has(loaded) && slots[loaded].url) choose(loaded, !audio.paused, true);
+  }
+  $("addSong").addEventListener("click", () => $("file").click());
+  $("addBg").addEventListener("click", () => {
+    if (cur < 0) { toast("Önce bir şarkı ekle ve seç"); return; }
+    $("fileBg").click();
+  });
+  $("file").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+  $("fileBg").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; toast("Arka plan " + slots[cur].title + " için ayarlandı"); });
+  let depth = 0;
+  addEventListener("dragenter", e => { e.preventDefault(); depth++; $("drop").classList.add("show"); });
+  addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; $("drop").classList.remove("show"); } });
+  addEventListener("dragover", e => e.preventDefault());
+  addEventListener("drop", e => { e.preventDefault(); depth = 0; $("drop").classList.remove("show"); addFiles(e.dataTransfer.files); });
+
+  /* ================= başlangıç ================= */
+  setWheel();
+  setMessage("Şarkı dosyalarını (mp3) bu pencereye bırak.");
+  restore();
+})();
+</script>
+</body>
+</html>

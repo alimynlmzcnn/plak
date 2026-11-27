@@ -95,12 +95,11 @@
   #adds button { font: 14px system-ui, sans-serif; color: rgba(255,255,255,.75); background: rgba(0,0,0,.45);
     border: 1px solid rgba(255,255,255,.28); border-radius: 999px; padding: 10px 18px; cursor: pointer; }
   #adds button:hover, #adds button:focus-visible { color: #fff; border-color: rgba(255,255,255,.6); outline: none; }
-  #adds:not(.tap) { display: none; }
   #bgWrap { position: relative; }
-  #bgMenu { position: absolute; right: 0; bottom: calc(100% + 8px); display: flex; flex-direction: column; gap: 4px; min-width: 130px;
+  #bgMenu { position: absolute; right: 0; bottom: calc(100% + 8px); display: flex; flex-direction: column; gap: 4px; min-width: 190px;
     padding: 6px; border-radius: 16px; background: rgba(0,0,0,.72); border: 1px solid rgba(255,255,255,.2); backdrop-filter: blur(8px); }
   #bgMenu[hidden] { display: none; }
-  #bgMenu button { border: 0 !important; background: transparent !important; text-align: left; border-radius: 10px !important; padding: 9px 14px !important; }
+  #bgMenu button { white-space: nowrap; border: 0 !important; background: transparent !important; text-align: left; border-radius: 10px !important; padding: 9px 14px !important; }
   #bgMenu button:hover, #bgMenu button:focus-visible { background: rgba(255,255,255,.12) !important; }
   #toast { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 4; font: 13px system-ui, sans-serif; color: #fff;
     background: rgba(0,0,0,.65); padding: 8px 14px; border-radius: 999px; opacity: 0; transition: opacity .3s; pointer-events: none; }
@@ -135,12 +134,6 @@
   #addSong { display: block; width: 100%; margin-top: 4px; padding: 8px; background: none; border: 0;
     border-top: 1px solid rgba(255,255,255,.1); color: rgba(255,255,255,.6); text-align: left; cursor: pointer; font: 13px system-ui, sans-serif; }
   #addSong:hover, #addSong:focus-visible { color: #fff; outline: none; }
-  #acts { display: flex; flex-wrap: wrap; gap: 2px 14px; padding: 8px 8px 4px; margin-top: 4px; border-top: 1px solid rgba(255,255,255,.1); }
-  #acts span { color: rgba(255,255,255,.5); cursor: pointer; white-space: nowrap; }
-  #acts span:hover { color: #fff; }
-  #acts i { font-style: normal; margin-left: 3px; color: rgba(255,255,255,.7); }
-  #acts i:hover { color: #ff7a70; }
-  #acts i[hidden] { display: none; }
   #drop { position: fixed; inset: 0; display: none; place-items: center; background: rgba(0,0,0,.85); z-index: 9; font-size: 24px; }
   #drop.show { display: grid; }
   #drop { white-space: pre-line; text-align: center; line-height: 1.6; }
@@ -172,14 +165,21 @@
 <div id="bar"><div id="fill"></div></div>
 <div id="adds">
   <button id="tapB" type="button" title="Şarkı çalarken her kelime başlarken Enter'a bas (ya da ekrana dokun). Geri al: Backspace. Çıkış: Esc. Shift+tıkla: kayıtlı kelime zamanlarını sil">● Kelime kaydı</button>
-
+  <div id="bgWrap">
+    <div id="bgMenu" hidden>
+      <button id="mCover" type="button">Kapak ekle</button>
+      <button id="mCoverX" type="button" hidden>Kapağı kaldır</button>
+      <button id="mBg" type="button">Arka plan ekle</button>
+      <button id="mBgX" type="button" hidden>Arka planı kaldır</button>
+    </div>
+    <button id="addBg" type="button" title="Plağın kapağı ve arka plan">Görünüm</button>
+  </div>
 </div>
 <div id="list">
   <button id="listBtn" type="button" title="Şarkı listesi">♫ 0</button>
   <div id="songs">
     <div id="rows"></div>
     <button id="addSong" type="button">+ şarkı ekle</button>
-    <div id="acts"><span id="actCover" title="Resmi doğrudan plağın üstüne de bırakabilirsin">kapak</span><i id="xCover" hidden title="Kapağı kaldır">×</i><span id="actBg" title="Resmi plağın dışında bir yere de bırakabilirsin">arka plan</span><i id="xBg" hidden title="Arka planı kaldır">×</i><span id="actTap" title="Şarkı çalarken her kelime başlarken Enter'a bas">kelime kaydı</span></div>
   </div>
 </div>
 <div id="toast"></div>
@@ -582,16 +582,16 @@
       ac = new (window.AudioContext || window.webkitAudioContext)();
       const src = ac.createMediaElementSource(audio);
       an = ac.createAnalyser(); an.fftSize = 512; an.smoothingTimeConstant = .55;
-      src.connect(an); an.connect(ac.destination);
+      mainGain = ac.createGain(); src.connect(mainGain); mainGain.connect(an); an.connect(ac.destination);
       fbuf = new Uint8Array(an.frequencyBinCount);
     } catch { ac = null; an = null; }
   }
 
   /* ================= sararken plak sesi ================= */
-  const REV = 200;                           // 33⅓ devir: saniyede 200 derece = normal hız
+  const REV = 100;                           // normal hızda plağın dönüşü: saniyede 100 derece (gerçek 33⅓ devir = 200°/sn, ekranda hızlı durduğu için yarıya indirildi)
   let scBuf = null, scBlob = null, scNode = null;
-  const sc = { on: false, pos: 0, rate: 0, want: 0, gain: 0, last: 0, until: 0, noise: 0, k: .0025, mute: false };
-  let handoff = false, handoffT = 0, wSpeed = 0, lastSeek = 0;   // handoff: el çekildi, plak yavaşça normal hıza dönüyor
+  const sc = { on: false, pos: 0, rate: 0, want: 0, gain: 0, last: 0, until: 0, noise: 0, k: .0004, mute: false, y0: 0, y1: 0 };
+  let handoff = false, handoffT = 0, wSpeed = 0, lastSeek = 0, mainGain = null;   // handoff: el çekildi, plak yavaşça normal hıza dönüyor
   async function prepareScratch() {
     const blob = loaded >= 0 ? slots[loaded].blob : null;
     if (!ac || !blob || blob === scBlob) return;
@@ -615,30 +615,31 @@
       for (let i = 0; i < out[0].length; i++) {
         sc.rate += (want - sc.rate) * sc.k;
         const v = Math.abs(sc.rate);
-        sc.gain += ((sc.mute ? 0 : Math.min(1, v * 2.5)) - sc.gain) * (sc.mute ? .02 : .006);
+        sc.gain += ((sc.mute ? 0 : Math.min(1, v * 2.5)) - sc.gain) * (sc.mute ? .00057 : .006);
         sc.pos = Math.max(0, Math.min(len - 2, sc.pos + sc.rate * step));
         const k = Math.floor(sc.pos), f = sc.pos - k;
         // iğne hışırtısı ve ara sıra çıtırtı
         sc.noise += ((Math.random() * 2 - 1) - sc.noise) * .25;
         const dust = sc.noise * .025 * Math.min(1.5, v) + (Math.random() < .00025 * v ? (Math.random() - .5) * .35 : 0);
-        for (let c = 0; c < 2; c++) out[c][i] = ((ch[c][k] * (1 - f) + ch[c][k + 1] * f) * .85 + dust) * sc.gain;
+        // iğne: hızlı sarmada tiz kısılır (alias olmasın), geri giderken iğne ters izlediği için ses boğuklaşır
+        const a = sc.rate < 0 ? .3 : Math.min(1, 1.3 / Math.max(1, v));
+        const x0 = ch[0][k] * (1 - f) + ch[0][k + 1] * f, x1 = ch[1][k] * (1 - f) + ch[1][k + 1] * f;
+        sc.y0 += a * (x0 - sc.y0); sc.y1 += a * (x1 - sc.y1);
+        out[0][i] = (sc.y0 * .85 + dust) * sc.gain; out[1][i] = (sc.y1 * .85 + dust) * sc.gain;
       }
     };
     scNode.connect(ac.destination);
   }
   function scratchStart(t, cont, playing) {
     ensureScratchNode(); prepareScratch();
-    sc.on = true; sc.mute = false; sc.k = .0025; sc.last = performance.now();
+    sc.on = true; sc.mute = false; sc.k = .0004; sc.last = performance.now();
     if (cont) { sc.want = sc.rate; return; }           // plak zaten dönüyordu: sesi kesmeden devam
     sc.want = sc.rate = sc.gain = playing ? 1 : 0;      // normal hızdan başla, ses kesilmesin
     if (scBuf) sc.pos = t * scBuf.sampleRate;
   }
   // deg: parmağın döndürdüğü açı, ms: geçen süre. Hız parmağa göre: hızlı = hızlı/tiz, yavaş = yavaş/pes, ters = geri
-  function scratchMove(deg, ms) {
-    const r = Math.max(-6, Math.min(6, deg / (Math.max(8, ms) / 1000) / REV));
-    sc.want = sc.want * .35 + r * .65; sc.last = performance.now();
-  }
-  const scratchStop = () => { sc.on = false; sc.want = 0; sc.until = 0; sc.mute = false; sc.k = .0025; };
+  function scratchMove(rate) { sc.want = Math.max(-6, Math.min(6, rate)); sc.last = performance.now(); }
+  const scratchStop = () => { sc.on = false; sc.want = 0; sc.until = 0; sc.mute = false; sc.k = .0004; };
   // ok tuşları ve fare tekerleği için kısa bir "vınn"
   function scratchBlip(from, dir) {
     ensureScratchNode(); prepareScratch();
@@ -652,10 +653,10 @@
     handoff = false;
     const t = scBuf ? sc.pos / scBuf.sampleRate : audio.currentTime;
     try { audio.currentTime = Math.max(0, Math.min((audio.duration || t + 1) - .05, t + .03)); } catch {}
-    audio.volume = 0; audio.play().catch(() => {});
-    sc.mute = true; sc.until = performance.now() + 200; sc.on = false; sc.want = 1;
-    const t0 = performance.now();
-    (function up() { const k = Math.min(1, (performance.now() - t0) / 70); audio.volume = k; if (k < 1) requestAnimationFrame(up); })();
+    // çalar ses seviyesi 0'dan yükselirken motor sesi aynı hızda söner: toplam ses sabit kalır, kesinti duyulmaz
+    if (mainGain && ac) { const n = ac.currentTime; mainGain.gain.cancelScheduledValues(n); mainGain.gain.setValueAtTime(0, n); mainGain.gain.setTargetAtTime(1, n, .04); }
+    audio.play().catch(() => {});
+    sc.mute = true; sc.until = performance.now() + 300; sc.on = false; sc.want = 1;
   }
   function cancelHandoff() {   // plak yavaşlarken kısa dokunuş: dur
     if (!handoff) return;
@@ -784,6 +785,13 @@
 
   /* ================= plağı çevirerek ileri / geri sarma ================= */
   let dragging = false, scrubbing = false, wasPlaying = false, lastA = 0, lastE = 0, moved = 0, tgt = 0, wt;
+  let vs = [];   // parmağın son hareketleri (hız tahmini için)
+  function fingerRate(t, d, ms) {
+    vs.push({ t, d }); while (vs.length > 2 && t - vs[0].t > 90) vs.shift();
+    if (vs.length < 2) return d / Math.max(8, ms) * 1000 / REV;
+    let sum = 0; for (let i = 1; i < vs.length; i++) sum += vs[i].d;
+    return sum / Math.max(24, vs[vs.length - 1].t - vs[0].t) * 1000 / REV;
+  }
   const angleOf = e => { const b = rec.getBoundingClientRect(); return Math.atan2(e.clientY - (b.top + b.height / 2), e.clientX - (b.left + b.width / 2)) * 180 / Math.PI; };
   const showTime = t => { now.textContent = fmt(t) + " / " + fmt(audio.duration); };
   const showTitle = () => { if (cur >= 0) now.textContent = slots[cur].title; };
@@ -795,7 +803,7 @@
     showTime(nt); clearTimeout(wt); wt = setTimeout(showTitle, 900);
   }
   rec.addEventListener("pointerdown", e => {
-    dragging = true; scrubbing = false; moved = 0; lastA = angleOf(e); tgt = audio.currentTime || 0;
+    dragging = true; scrubbing = false; moved = 0; vs = []; lastA = angleOf(e); tgt = audio.currentTime || 0;
     lastE = e.timeStamp; if (audio.src) { ensureAudio(); prepareScratch(); }
     wasPlaying = !audio.paused || handoff; rec.setPointerCapture(e.pointerId); rec.classList.add("drag");
   });
@@ -813,7 +821,7 @@
       const cont = handoff; handoff = false;
       audio.pause(); scratchStart(audio.currentTime, cont, wasPlaying);
     }
-    R += d; setWheel(); scratchMove(d, ms);                 // plak parmağı izler, ses hızı dönüş hızına bağlı
+    R += d; setWheel(); scratchMove(fingerRate(e.timeStamp, d, ms));   // plak parmağı izler, ses hızı dönüş hızına bağlı
   });
   const release = () => {
     if (!dragging) return;
@@ -824,7 +832,7 @@
     }
     scrubbing = false; showTitle();
     if (wasPlaying) {                                       // el çekildi: plak yavaşça normal hıza gelir
-      sc.on = false; sc.mute = false; sc.want = 1; sc.k = .00012; sc.until = performance.now() + 5000;
+      sc.on = false; sc.mute = false; sc.want = 1; sc.k = .00008; sc.until = performance.now() + 6000;
       handoff = true; handoffT = performance.now(); rec.classList.add("playing");
     } else scratchStop();
   };
@@ -866,13 +874,13 @@
     tapMode = true; shownIdx = -1; hideWord();
     audio.playbackRate = .85;
     if (audio.paused) audio.play().catch(() => {});
-    tapB.textContent = "■ Bitir"; $("adds").classList.add("tap");
+    tapB.textContent = "■ Bitir"; 
     renderTap();
     toast("Her kelime başlarken Enter'a bas (veya ekrana dokun) · Backspace: geri · Esc: bitir");
   }
   function exitTap() {
     if (!tapMode) return;
-    tapMode = false; audio.playbackRate = 1; tapB.textContent = "● Kelime kaydı"; $("adds").classList.remove("tap");
+    tapMode = false; audio.playbackRate = 1; tapB.textContent = "● Kelime kaydı";
     if (loaded >= 0) { save(loaded); setLyrics(slots[loaded].lines); }
   }
   function tap() {
@@ -950,9 +958,12 @@
     else if (touched.has(loaded) && slots[loaded].url) choose(loaded, !audio.paused, true);
   }
   $("addSong").addEventListener("click", () => $("file").click());
+  const bgMenu = $("bgMenu");
   function refreshActs() {
     const s = slots[loaded >= 0 ? loaded : cur];
-    $("xCover").hidden = !(s && s.cover); $("xBg").hidden = !(s && s.bgUser);
+    $("mCover").textContent = s && s.cover ? "Kapağı değiştir" : "Kapak ekle";
+    $("mBg").textContent = s && s.bgUser ? "Arka planı değiştir" : "Arka plan ekle";
+    $("mCoverX").hidden = !(s && s.cover); $("mBgX").hidden = !(s && s.bgUser);
   }
   function removeBg() {
     const i = cur, s = slots[i];
@@ -969,12 +980,13 @@
     save(idx); toast("Kapak çıkarıldı"); refreshActs();
   }
   const needSong = () => { if (cur < 0 && loaded < 0) { toast("Önce bir şarkı ekle ve seç"); return true; } return false; };
-  $("actCover").addEventListener("click", () => { if (!needSong()) $("fileCover").click(); });
-  $("actBg").addEventListener("click", () => { if (!needSong()) $("fileBg").click(); });
-  $("xCover").addEventListener("click", removeCover);
-  $("xBg").addEventListener("click", removeBg);
-  $("actTap").addEventListener("click", () => { list.classList.remove("open"); tapB.click(); });
-  $("listBtn").addEventListener("click", refreshActs);
+  $("addBg").addEventListener("click", () => { if (needSong()) return; refreshActs(); bgMenu.hidden = !bgMenu.hidden; });
+  $("mCover").addEventListener("click", () => { bgMenu.hidden = true; $("fileCover").click(); });
+  $("mBg").addEventListener("click", () => { bgMenu.hidden = true; $("fileBg").click(); });
+  $("mCoverX").addEventListener("click", () => { bgMenu.hidden = true; removeCover(); });
+  $("mBgX").addEventListener("click", () => { bgMenu.hidden = true; removeBg(); });
+  addEventListener("pointerdown", e => { if (!e.target.closest("#bgWrap")) bgMenu.hidden = true; });
+  addEventListener("keydown", e => { if (e.code === "Escape") bgMenu.hidden = true; });
   $("file").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
   $("fileBg").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; toast("Arka plan " + slots[cur].title + " için ayarlandı"); setTimeout(refreshActs, 50); });
   /* ---- plak kapağı: resmi plağın üstüne bırak ya da "+ Kapak" ---- */

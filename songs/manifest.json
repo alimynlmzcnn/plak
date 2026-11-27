@@ -1,10 +1,4 @@
 [
-  {
-    "file": "This_I_Love.mp3",
-    "lrc": "This_I_Love.lrc"
-  },
-  {
-    "file": "Good_Looking.m4a",
-    "lrc": "Good_Looking.lrc"
-  }
+  { "file": "This_I_Love.mp3", "lrc": "This_I_Love.lrc", "cover": "This_I_Love.jpg" },
+  { "file": "Good_Looking.m4a", "lrc": "Good_Looking.lrc", "cover": "Good_Looking.jpg" }
 ]

@@ -96,6 +96,12 @@
   #adds button { font: 14px system-ui, sans-serif; color: rgba(255,255,255,.75); background: rgba(0,0,0,.45);
     border: 1px solid rgba(255,255,255,.28); border-radius: 999px; padding: 10px 18px; cursor: pointer; }
   #adds button:hover, #adds button:focus-visible { color: #fff; border-color: rgba(255,255,255,.6); outline: none; }
+  #bgWrap { position: relative; }
+  #bgMenu { position: absolute; right: 0; bottom: calc(100% + 8px); display: flex; flex-direction: column; gap: 4px; min-width: 130px;
+    padding: 6px; border-radius: 16px; background: rgba(0,0,0,.72); border: 1px solid rgba(255,255,255,.2); backdrop-filter: blur(8px); }
+  #bgMenu[hidden] { display: none; }
+  #bgMenu button { border: 0 !important; background: transparent !important; text-align: left; border-radius: 10px !important; padding: 9px 14px !important; }
+  #bgMenu button:hover, #bgMenu button:focus-visible { background: rgba(255,255,255,.12) !important; }
   #toast { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 4; font: 13px system-ui, sans-serif; color: #fff;
     background: rgba(0,0,0,.65); padding: 8px 14px; border-radius: 999px; opacity: 0; transition: opacity .3s; pointer-events: none; }
   /* ---------- şarkı listesi (minimal) ---------- */
@@ -161,7 +167,10 @@
 <div id="adds">
   <button id="tapB" type="button" title="Şarkı çalarken her kelime başlarken Enter'a bas (ya da ekrana dokun). Geri al: Backspace. Çıkış: Esc. Shift+tıkla: kayıtlı kelime zamanlarını sil">● Kelime kaydı</button>
   <button id="addCover" type="button" title="Plağın ortasındaki kapağı değiştir. Resmi doğrudan plağın üstüne de bırakabilirsin">+ Kapak</button>
-  <button id="addBg" type="button">+ Arka plan</button>
+  <div id="bgWrap">
+    <div id="bgMenu" hidden><button id="bgAdd" type="button">Ekle</button><button id="bgDel" type="button" hidden>Çıkar</button></div>
+    <button id="addBg" type="button">Arka plan</button>
+  </div>
 </div>
 <div id="list">
   <button id="listBtn" type="button" title="Şarkı listesi">♫ 0</button>
@@ -900,10 +909,24 @@
     else if (touched.has(loaded) && slots[loaded].url) choose(loaded, !audio.paused, true);
   }
   $("addSong").addEventListener("click", () => $("file").click());
+  const bgMenu = $("bgMenu");
+  function removeBg() {
+    const i = cur, s = slots[i];
+    if (!s || !s.bgUser) return;
+    s.bgUser = false; s.bg = s.bgData ? dataBlob(s.bgData) : null; s.credit = "";
+    save(i); toast("Arka plan çıkarıldı");
+    if (i === loaded) { clearPhoto(); ensurePhoto(i); }
+  }
   $("addBg").addEventListener("click", () => {
     if (cur < 0) { toast("Önce bir şarkı ekle ve seç"); return; }
-    $("fileBg").click();
+    const has = !!slots[cur].bgUser;
+    $("bgAdd").textContent = has ? "Değiştir" : "Ekle"; $("bgDel").hidden = !has;
+    bgMenu.hidden = !bgMenu.hidden;
   });
+  $("bgAdd").addEventListener("click", () => { bgMenu.hidden = true; $("fileBg").click(); });
+  $("bgDel").addEventListener("click", () => { bgMenu.hidden = true; removeBg(); });
+  addEventListener("pointerdown", e => { if (!e.target.closest("#bgWrap")) bgMenu.hidden = true; });
+  addEventListener("keydown", e => { if (e.code === "Escape") bgMenu.hidden = true; });
   $("file").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
   $("fileBg").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; toast("Arka plan " + slots[cur].title + " için ayarlandı"); });
   /* ---- plak kapağı: resmi plağın üstüne bırak ya da "+ Kapak" ---- */

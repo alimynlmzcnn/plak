@@ -131,6 +131,9 @@
   #addSong:hover, #addSong:focus-visible { color: #fff; outline: none; }
   #drop { position: fixed; inset: 0; display: none; place-items: center; background: rgba(0,0,0,.85); z-index: 9; font-size: 24px; }
   #drop.show { display: grid; }
+  #drop { white-space: pre-line; text-align: center; line-height: 1.6; }
+  body.dragimg #rec { z-index: 10; }
+  #rec.dropt #wheel { box-shadow: 0 0 0 3px rgba(255,255,255,.75), 0 0 40px rgba(255,255,255,.25); }
   @media (max-width: 700px) { #rec { transform: scale(.72); transform-origin: 0 100%; left: -80px; bottom: -80px; } }
   @media (prefers-reduced-motion: reduce) { .photo { animation: none; } .fx, .fx .ch { animation: none !important; opacity: 1 !important; } }
 </style>
@@ -157,6 +160,7 @@
 <div id="bar"><div id="fill"></div></div>
 <div id="adds">
   <button id="tapB" type="button" title="Şarkı çalarken her kelime başlarken Enter'a bas (ya da ekrana dokun). Geri al: Backspace. Çıkış: Esc. Shift+tıkla: kayıtlı kelime zamanlarını sil">● Kelime kaydı</button>
+  <button id="addCover" type="button" title="Plağın ortasındaki kapağı değiştir. Resmi doğrudan plağın üstüne de bırakabilirsin">+ Kapak</button>
   <button id="addBg" type="button">+ Arka plan</button>
 </div>
 <div id="list">
@@ -169,6 +173,7 @@
 <div id="toast"></div>
 <input id="file" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.lrc" multiple hidden>
 <input id="fileBg" type="file" accept="image/*" hidden>
+<input id="fileCover" type="file" accept="image/*" hidden>
 <div id="drop">Dosyaları bırak</div>
 
 <script>
@@ -217,7 +222,7 @@
   async function save(i) {
     try {
       const s = slots[i], d = await idb();
-      d.transaction("s", "readwrite").objectStore("s").put({ blob: s.blob, title: s.title, base: s.base, lines: s.lines, bg: s.bg, credit: s.credit, bgUser: s.bgUser, offset: s.offset }, i);
+      d.transaction("s", "readwrite").objectStore("s").put({ blob: s.blob, title: s.title, base: s.base, lines: s.lines, bg: s.bg, credit: s.credit, bgUser: s.bgUser, offset: s.offset, cover: s.cover || null }, i);
     } catch {}
   }
   async function restore() {
@@ -234,6 +239,7 @@
             if (v.blob) { s.blob = v.blob; s.url = URL.createObjectURL(v.blob); }
             if (!s.key) s.title = v.title || "";
             s.base = v.base; s.lines = v.lines || null; s.offset = v.offset || 0;
+            if (v.cover) { s.cover = v.cover; s.coverUrl = URL.createObjectURL(v.cover); }
             if (v.bgUser || !s.bgData) { s.bg = v.bg || null; s.credit = v.credit || ""; s.bgUser = !!v.bgUser; }
           }
           c.continue();
@@ -281,7 +287,7 @@
   function removeSong(i) {
     const s = slots[i], oldUrl = s.url, wasLoaded = loaded === i, wasPlaying = !audio.paused;
     const at = order.indexOf(i);
-    s.url = null; s.blob = null; s.lines = null; s.base = null; s.offset = 0;
+    s.url = null; s.blob = null; s.lines = null; s.base = null; s.offset = 0; s.cover = null; s.coverUrl = null;
     s.bg = s.bgData ? dataBlob(s.bgData) : null; s.credit = ""; s.bgUser = false;
     if (!s.key) s.title = "";
     dropStored(i);
@@ -292,7 +298,7 @@
       if (nx !== undefined) choose(nx, wasPlaying);
       else {
         audio.pause(); audio.removeAttribute("src"); audio.load(); scBuf = null; scBlob = null;
-        rec.classList.remove("playing"); fill.style.width = "0%"; now.textContent = ""; clearPhoto();
+        rec.classList.remove("playing"); fill.style.width = "0%"; now.textContent = ""; clearPhoto(); applyCover(null);
         setMessage("Şarkı dosyalarını (mp3) bu pencereye bırak."); list.classList.add("open");
       }
     }
@@ -900,11 +906,52 @@
   });
   $("file").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
   $("fileBg").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; toast("Arka plan " + slots[cur].title + " için ayarlandı"); });
+  /* ---- plak kapağı: resmi plağın üstüne bırak ya da "+ Kapak" ---- */
+  async function shrinkCover(file) {
+    try {
+      const bmp = await createImageBitmap(file), side = Math.min(bmp.width, bmp.height), S = Math.min(512, side);
+      const c = document.createElement("canvas"); c.width = c.height = S;
+      c.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, S, S);
+      const b = await new Promise(res => c.toBlob(res, "image/jpeg", .88));
+      return b || file;
+    } catch { return file; }
+  }
+  async function setCover(file) {
+    const idx = loaded >= 0 ? loaded : cur, s = slots[idx];
+    if (!s || !s.url) { toast("Önce bir şarkı seç"); return; }
+    const blob = await shrinkCover(file), old = s.coverUrl;
+    s.cover = blob; s.coverUrl = URL.createObjectURL(blob);
+    if (idx === loaded) applyCover(s);
+    save(idx); toast("Kapak ayarlandı");
+    if (old) setTimeout(() => URL.revokeObjectURL(old), 1500);
+  }
+  $("addCover").addEventListener("click", () => {
+    if (loaded < 0 && cur < 0) { toast("Önce bir şarkı ekle ve seç"); return; }
+    $("fileCover").click();
+  });
+  $("fileCover").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) setCover(f); });
+
   let depth = 0;
-  addEventListener("dragenter", e => { e.preventDefault(); depth++; $("drop").classList.add("show"); });
-  addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; $("drop").classList.remove("show"); } });
+  const hasImg = e => [...((e.dataTransfer && e.dataTransfer.items) || [])].some(i => i.kind === "file" && i.type.startsWith("image"));
+  const endFileDrag = () => { depth = 0; $("drop").classList.remove("show"); document.body.classList.remove("dragimg"); rec.classList.remove("dropt"); };
+  addEventListener("dragenter", e => {
+    e.preventDefault(); depth++;
+    const img = hasImg(e);
+    $("drop").textContent = img ? "Resmi plağın üstüne bırak: kapak olur\nBaşka yere bırak: arka plan olur" : "Dosyaları bırak";
+    document.body.classList.toggle("dragimg", img);
+    $("drop").classList.add("show");
+  });
+  addEventListener("dragleave", () => { if (--depth <= 0) endFileDrag(); });
   addEventListener("dragover", e => e.preventDefault());
-  addEventListener("drop", e => { e.preventDefault(); depth = 0; $("drop").classList.remove("show"); addFiles(e.dataTransfer.files); });
+  addEventListener("drop", e => { e.preventDefault(); endFileDrag(); addFiles(e.dataTransfer.files); });
+  rec.addEventListener("dragover", e => { e.preventDefault(); rec.classList.add("dropt"); });
+  rec.addEventListener("dragleave", e => { if (!rec.contains(e.relatedTarget)) rec.classList.remove("dropt"); });
+  rec.addEventListener("drop", e => {
+    e.preventDefault(); e.stopPropagation(); endFileDrag();
+    const files = [...e.dataTransfer.files], img = files.find(isImage), rest = files.filter(f => !isImage(f));
+    if (img) setCover(img);
+    if (rest.length) addFiles(rest);
+  });
 
   /* ================= ortak şarkılar: songs/manifest.json'dan otomatik yükle ================= */
   async function loadShared() {

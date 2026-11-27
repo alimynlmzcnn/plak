@@ -622,7 +622,7 @@
         sc.noise += ((Math.random() * 2 - 1) - sc.noise) * .25;
         const dust = sc.noise * .025 * Math.min(1.5, v) + (Math.random() < .00025 * v ? (Math.random() - .5) * .35 : 0);
         // iğne: hızlı sarmada tiz kısılır (alias olmasın), geri giderken iğne ters izlediği için ses boğuklaşır
-        const a = sc.rate < 0 ? .3 : Math.min(1, 1.3 / Math.max(1, v));
+        const a = sc.rate < 0 ? .3 : Math.min(1, 2.2 / Math.max(1, v));
         const x0 = ch[0][k] * (1 - f) + ch[0][k + 1] * f, x1 = ch[1][k] * (1 - f) + ch[1][k + 1] * f;
         sc.y0 += a * (x0 - sc.y0); sc.y1 += a * (x1 - sc.y1);
         out[0][i] = (sc.y0 * .85 + dust) * sc.gain; out[1][i] = (sc.y1 * .85 + dust) * sc.gain;
@@ -638,7 +638,7 @@
     if (scBuf) sc.pos = t * scBuf.sampleRate;
   }
   // deg: parmağın döndürdüğü açı, ms: geçen süre. Hız parmağa göre: hızlı = hızlı/tiz, yavaş = yavaş/pes, ters = geri
-  function scratchMove(rate) { sc.want = Math.max(-6, Math.min(6, rate)); sc.last = performance.now(); }
+  function scratchMove(rate) { sc.want = Math.max(-24, Math.min(24, rate)); sc.last = performance.now(); }
   const scratchStop = () => { sc.on = false; sc.want = 0; sc.until = 0; sc.mute = false; sc.k = .0004; };
   // ok tuşları ve fare tekerleği için kısa bir "vınn"
   function scratchBlip(from, dir) {
@@ -788,10 +788,13 @@
   let vs = [];   // parmağın son hareketleri (hız tahmini için)
   function fingerRate(t, d, ms) {
     vs.push({ t, d }); while (vs.length > 2 && t - vs[0].t > 90) vs.shift();
-    if (vs.length < 2) return d / Math.max(8, ms) * 1000 / REV;
+    if (vs.length < 2) return curve(d / Math.max(8, ms) * 1000 / REV);
     let sum = 0; for (let i = 1; i < vs.length; i++) sum += vs[i].d;
-    return sum / Math.max(24, vs[vs.length - 1].t - vs[0].t) * 1000 / REV;
+    return curve(sum / Math.max(24, vs[vs.length - 1].t - vs[0].t) * 1000 / REV);
   }
+  // hassasiyet: yavaş çevirmede birebir (ince ayar), hızlı çevirmede ivmelenir: ileri/geri sarmak kolay olsun
+  const SENS_KNEE = 1.2, SENS_BOOST = 4;
+  const curve = x => { const a = Math.abs(x); return Math.sign(x) * (a <= SENS_KNEE ? a : SENS_KNEE + (a - SENS_KNEE) * SENS_BOOST); };
   const angleOf = e => { const b = rec.getBoundingClientRect(); return Math.atan2(e.clientY - (b.top + b.height / 2), e.clientX - (b.left + b.width / 2)) * 180 / Math.PI; };
   const showTime = t => { now.textContent = fmt(t) + " / " + fmt(audio.duration); };
   const showTitle = () => { if (cur >= 0) now.textContent = slots[cur].title; };

@@ -1,5 +1,6 @@
 [
   { "file": "This_I_Love.mp3", "lrc": "This_I_Love.lrc", "cover": "This_I_Love.jpg" },
   { "file": "Good_Looking.m4a", "lrc": "Good_Looking.lrc", "cover": "Good_Looking.jpg" },
-  { "file": "Loverboy.m4a", "lrc": "Loverboy.lrc", "cover": "Loverboy.jpg" }
+  { "file": "Loverboy.m4a", "lrc": "Loverboy.lrc", "cover": "Loverboy.jpg" },
+  { "file": "Creep.mp3", "lrc": "Creep.lrc", "cover": "Creep.jpg", "title": "Creep" }
 ]

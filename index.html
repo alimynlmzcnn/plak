@@ -80,6 +80,12 @@
   #hub i { width: 10px; height: 10px; border-radius: 50%; background: #fff; opacity: .85; }
   #rec:not(.playing):not(.scrub) #hub i { width: 0; height: 0; background: none; border-radius: 0; opacity: 1;
     border-style: solid; border-width: 8px 0 8px 13px; border-color: transparent transparent transparent rgba(255,255,255,.8); margin-left: 4px; }
+  #cover { position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
+    background: #000 center / cover no-repeat; opacity: 0; transition: opacity .5s; pointer-events: none; }
+  #cover.on { opacity: 1; }
+  #hub.cv { background: transparent; }
+  #hub.cv i { box-shadow: 0 0 0 2px rgba(0,0,0,.55); }
+  #rec:not(.playing):not(.scrub) #hub.cv i { filter: drop-shadow(0 0 3px rgba(0,0,0,.9)); }
   #needle { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: rotate(45deg); pointer-events: none; }
   #needle b { position: absolute; left: -1px; top: -246px; width: 2px; height: 30px; background: #fff; border-radius: 2px;
     box-shadow: 0 0 10px rgba(255,255,255,.8); }
@@ -143,6 +149,7 @@
 <div id="rec" title="Plağı çevir: saat yönü ileri, ters yön geri sarar. Tıkla: durdur / oynat">
   <div id="wheel"></div>
   <div id="sheen"></div>
+  <div id="cover"></div>
   <div id="hub"><i></i></div>
   <div id="needle"><b></b></div>
 </div>
@@ -246,7 +253,13 @@
   let order = [], seq = [], cur = -1, loaded = -1, R = 0;
   const list = $("list"), rowsEl = $("rows");
   const fmt = t => { t = Math.max(0, Math.round(t || 0)); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
-  const setWheel = () => { wheel.style.transform = `rotate(${R}deg)`; };
+  const coverEl = $("cover"), hubEl = $("hub");
+  const setWheel = () => { wheel.style.transform = `rotate(${R}deg)`; coverEl.style.transform = `rotate(${R}deg)`; };
+  function applyCover(s) {
+    const u = s && s.coverUrl;
+    coverEl.style.backgroundImage = u ? `url("${u}")` : "";
+    coverEl.classList.toggle("on", !!u); hubEl.classList.toggle("cv", !!u);
+  }
   const paintList = () => rowsEl.querySelectorAll(".row").forEach(r => r.classList.toggle("on", +r.dataset.i === cur));
   function renderList() {
     const have = slots.map((s, i) => s.url ? i : -1).filter(i => i >= 0);
@@ -704,6 +717,7 @@
     if (!s.url) return;
     if (loaded === i && audio.src && !force) { if (play && audio.paused) audio.play().catch(() => {}); return; }
     loaded = i;
+    applyCover(s);
     root.style.setProperty("--glow", s.glow);
     ensurePhoto(i);
     audio.src = s.url;
@@ -898,13 +912,17 @@
     toast("Şarkılar kontrol ediliyor…");
     try { const r = await fetch("songs/manifest.json", { cache: "no-cache" }); if (!r.ok) { toast("manifest.json bulunamadı (" + r.status + ")"); return; } items = await r.json(); } catch (e) { toast("manifest.json okunamadı"); console.error(e); return; }
     if (!Array.isArray(items)) { toast("manifest.json formatı yanlış"); return; }
+    const getCover = async (s, it) => {
+      if (!it.cover || s.coverUrl) return;
+      try { const r = await fetch("songs/" + encodeURIComponent(it.cover)); if (r.ok) s.coverUrl = URL.createObjectURL(await r.blob()); } catch {}
+    };
     let added = 0;
     for (const it of items) {
       try {
         if (!it || !it.file) continue;
         const name = it.title || it.file.replace(/\.[^.]+$/, ""), n = norm(name);
         const have = keyOrder.find(p => n.includes(p.key)) || slots.find(x => !x.key && x.base === n);
-        if (have && have.url) continue;   // zaten var (daha önce indirilmiş)
+        if (have && have.url) { await getCover(have, it); continue; }   // şarkı zaten var, sadece kapağı al
         const s = have || slots.find((x, i) => i >= PRESETS.length && !x.url);
         if (!s) break;
         const r = await fetch("songs/" + encodeURIComponent(it.file)); if (!r.ok) { toast(it.file + " indirilemedi (" + r.status + ")"); continue; }
@@ -912,9 +930,11 @@
         s.blob = b; s.url = URL.createObjectURL(b); s.base = n; s.lines = null;
         if (!s.key) s.title = name;
         if (it.lrc) { try { const lr = await fetch("songs/" + encodeURIComponent(it.lrc)); if (lr.ok) s.lines = parseLRC(await lr.text()); } catch {} }
+        await getCover(s, it);
         save(slots.indexOf(s)); added++;
       } catch {}
     }
+    if (loaded >= 0) applyCover(slots[loaded]);
     if (!added) return;
     renderList(); saveOrder();
     toast(added + " şarkı yüklendi");

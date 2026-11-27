@@ -1,6 +1,6 @@
 [
-  { "file": "This_I_Love.mp3", "lrc": "This_I_Love.lrc", "cover": "This_I_Love.jpg" },
-  { "file": "Good_Looking.m4a", "lrc": "Good_Looking.lrc", "cover": "Good_Looking.jpg" },
-  { "file": "Loverboy.m4a", "lrc": "Loverboy.lrc", "cover": "Loverboy.jpg" },
-  { "file": "Creep.mp3", "lrc": "Creep.lrc", "cover": "Creep.jpg", "title": "Creep" }
+  { "file": "This_I_Love.mp3", "lrc": "This_I_Love.lrc", "cover": "This_I_Love.jpg", "title": "This I Love" },
+  { "file": "Good_Looking.m4a", "lrc": "Good_Looking.lrc", "cover": "Good_Looking.jpg", "title": "Good Looking" },
+  { "file": "Loverboy.m4a", "lrc": "Loverboy.lrc", "cover": "Loverboy.jpg", "title": "Loverboy" },
+  { "file": "Radiohead_-_Creep.mp3", "lrc": "Radiohead_-_Creep.lrc", "cover": "Radiohead_-_Creep.jpeg", "title": "Creep" }
 ]
